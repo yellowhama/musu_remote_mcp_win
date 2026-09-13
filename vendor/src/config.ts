@@ -6,6 +6,7 @@ export interface AppConfig {
   endpoint: string;
   publicUrl: string | undefined;
   allowedHosts: string[] | undefined;
+  allowedOrigins: string[] | undefined;
   trustProxyHops: number;
   authToken: string | undefined;
   allowNoAuth: boolean;
@@ -17,6 +18,7 @@ export interface AppConfig {
   oauthAccessTokenTtlSeconds: number;
   oauthRefreshTokenTtlSeconds: number;
   oauthAuthorizationCodeTtlSeconds: number;
+  oauthMaxRegisteredClients: number;
   defaultCwd: string;
   defaultShell: string;
   maxRequestBody: string;
@@ -96,6 +98,19 @@ function normalizeOAuthUrl(value: string | undefined, name: string): string {
   return url.href;
 }
 
+function normalizeOrigin(value: string, name: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${name} must contain absolute origins`);
+  }
+  if (url.origin === "null" || url.pathname !== "/" || url.search || url.hash) {
+    throw new Error(`${name} entries must be origins without a path, query, or fragment`);
+  }
+  return url.origin;
+}
+
 export function loadConfig(
   env: NodeJS.ProcessEnv = process.env,
   processCwd = process.cwd(),
@@ -122,8 +137,17 @@ export function loadConfig(
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean);
 
-  const endpoint = normalizeEndpoint(env.MCP_ENDPOINT);
   const publicUrl = env.MCP_PUBLIC_URL?.trim().replace(/\/+$/, "") || undefined;
+  const configuredOrigins = env.MCP_ALLOWED_ORIGINS?.split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map((origin) => normalizeOrigin(origin, "MCP_ALLOWED_ORIGINS"));
+  const allowedOrigins = configuredOrigins && configuredOrigins.length > 0
+    ? [...new Set(configuredOrigins)]
+    : publicUrl
+      ? [new URL(publicUrl).origin]
+      : undefined;
+  const endpoint = normalizeEndpoint(env.MCP_ENDPOINT);
   const oauthIssuerUrl = oauthEnabled
     ? normalizeOAuthUrl(env.MCP_OAUTH_ISSUER?.trim() || publicUrl, "MCP_OAUTH_ISSUER")
     : undefined;
@@ -140,6 +164,7 @@ export function loadConfig(
     endpoint,
     publicUrl,
     allowedHosts: allowedHosts && allowedHosts.length > 0 ? allowedHosts : undefined,
+    allowedOrigins,
     trustProxyHops: parseInteger(
       env.MCP_TRUST_PROXY_HOPS,
       0,
@@ -174,6 +199,13 @@ export function loadConfig(
       5 * 60,
       "MCP_OAUTH_AUTHORIZATION_CODE_TTL_SECONDS",
       60,
+    ),
+    oauthMaxRegisteredClients: parseInteger(
+      env.MCP_OAUTH_MAX_REGISTERED_CLIENTS,
+      256,
+      "MCP_OAUTH_MAX_REGISTERED_CLIENTS",
+      1,
+      10_000,
     ),
     defaultCwd,
     defaultShell:

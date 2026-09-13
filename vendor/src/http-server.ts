@@ -9,7 +9,7 @@ import {
 } from "@modelcontextprotocol/sdk/server/auth/router.js";
 import express, { type Request, type Response } from "express";
 
-import { createBearerAuth, createHostValidation } from "./auth.js";
+import { createBearerAuth, createHostValidation, createOriginValidation } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { errorMessage } from "./errors.js";
 import { createMcpServer, type McpServices } from "./mcp-server.js";
@@ -97,6 +97,7 @@ export async function startHttpServer(
     next();
   });
   app.use(createHostValidation(config));
+  app.use(createOriginValidation(config));
 
   const activeRequests = new Set<ActiveRequest>();
   let activeMcpRequests = 0;
@@ -134,7 +135,13 @@ export async function startHttpServer(
       }
       next();
     });
-    app.use(mcpAuthRouter(oauthRouterOptions));
+    app.use(mcpAuthRouter({
+      ...oauthRouterOptions,
+      authorizationOptions: { rateLimit: { windowMs: 15 * 60 * 1000, max: 20 } },
+      clientRegistrationOptions: { rateLimit: { windowMs: 60 * 60 * 1000, max: 20 } },
+      tokenOptions: { rateLimit: { windowMs: 15 * 60 * 1000, max: 50 } },
+      revocationOptions: { rateLimit: { windowMs: 15 * 60 * 1000, max: 50 } },
+    }));
   }
   const authenticate = createBearerAuth(config, oauthProvider);
   const parseMcpJson = express.json({ limit: config.maxRequestBody });

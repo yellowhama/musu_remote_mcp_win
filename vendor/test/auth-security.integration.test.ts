@@ -46,6 +46,15 @@ describe("OAuth endpoint security boundaries", () => {
     const running = await startHttpServer(config, createServices(config));
 
     try {
+      const hostileOrigin = await fetch(`${baseUrl}/health`, {
+        headers: { origin: "https://attacker.example" },
+      });
+      expect(hostileOrigin.status).toBe(403);
+      const validOrigin = await fetch(`${baseUrl}/health`, {
+        headers: { origin: baseUrl },
+      });
+      expect(validOrigin.status).toBe(200);
+
       const approvalKeyAsBearer = await fetch(`${baseUrl}/mcp`, {
         method: "POST",
         headers: {
@@ -80,6 +89,44 @@ describe("OAuth endpoint security boundaries", () => {
       expect(statuses[20]).toBe(429);
     } finally {
       await running.close();
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("bounds OAuth client state and client metadata", async () => {
+    const temporaryDirectory = await mkdtemp(
+      path.join(os.tmpdir(), "cokacremote-oauth-bounds-test-"),
+    );
+    const provider = new RemoteDevOAuthProvider(
+      loadConfig(
+        {
+          MCP_OAUTH_ENABLED: "true",
+          MCP_OAUTH_APPROVAL_KEY: "oauth-approval-key",
+          MCP_PUBLIC_URL: "http://127.0.0.1:34567",
+          MCP_OAUTH_STATE_FILE: path.join(temporaryDirectory, "state.json"),
+          MCP_OAUTH_MAX_REGISTERED_CLIENTS: "2",
+        },
+        temporaryDirectory,
+      ),
+    );
+    const metadata = (id: string) => ({
+      client_id: id,
+      redirect_uris: [`https://chatgpt.com/connector/oauth/${id}`],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      scope: "mcp:tools",
+    });
+    try {
+      await provider.clientsStore.registerClient(metadata("one") as never);
+      await provider.clientsStore.registerClient(metadata("two") as never);
+      await expect(provider.clientsStore.registerClient(metadata("three") as never))
+        .rejects.toThrow("Registered client limit reached: 2");
+      await expect(provider.clientsStore.registerClient({
+        ...metadata("oversized"),
+        client_name: "x".repeat(257),
+      } as never)).rejects.toThrow("client_name");
+    } finally {
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
   });

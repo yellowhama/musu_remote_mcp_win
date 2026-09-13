@@ -72,18 +72,31 @@ function randomToken(): string {
 const LOOPBACK_REDIRECT_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 const SUPPORTED_CLIENT_AUTH_METHODS = new Set(["none", "client_secret_post"]);
 const SUPPORTED_GRANT_TYPES = new Set(["authorization_code", "refresh_token"]);
+const MAX_CLIENT_METADATA_FIELDS = 32;
+const MAX_REDIRECT_URIS = 16;
+const MAX_URI_LENGTH = 2048;
+const MAX_CLIENT_NAME_LENGTH = 256;
 
 function clientMetadataProblem(value: unknown): string | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return "Client metadata must be an object";
   }
   const client = value as Partial<OAuthClientInformationFull>;
+  if (Object.keys(value).length > MAX_CLIENT_METADATA_FIELDS) {
+    return `Client metadata must contain at most ${MAX_CLIENT_METADATA_FIELDS} fields`;
+  }
   if (!Array.isArray(client.redirect_uris) || client.redirect_uris.length === 0) {
     return "At least one redirect_uri is required";
+  }
+  if (client.redirect_uris.length > MAX_REDIRECT_URIS) {
+    return `At most ${MAX_REDIRECT_URIS} redirect_uris are allowed`;
   }
   for (const redirectUri of client.redirect_uris) {
     if (typeof redirectUri !== "string") {
       return "Every redirect_uri must be an absolute URL";
+    }
+    if (redirectUri.length > MAX_URI_LENGTH) {
+      return `redirect_uris must not exceed ${MAX_URI_LENGTH} characters`;
     }
     let parsed: URL;
     try {
@@ -98,6 +111,11 @@ function clientMetadataProblem(value: unknown): string | undefined {
     if (parsed.hash || parsed.username || parsed.password) {
       return "redirect_uris must not contain fragments or user credentials";
     }
+  }
+
+  if (client.client_name !== undefined &&
+      (typeof client.client_name !== "string" || client.client_name.length > MAX_CLIENT_NAME_LENGTH)) {
+    return `client_name must not exceed ${MAX_CLIENT_NAME_LENGTH} characters`;
   }
 
   if (
@@ -192,6 +210,7 @@ class PersistentOAuthStore implements OAuthRegisteredClientsStore {
     private readonly stateFile: string,
     private readonly accessTokenTtlSeconds: number,
     private readonly refreshTokenTtlSeconds: number,
+    private readonly maxRegisteredClients: number,
   ) {}
 
   private async ensureLoaded(): Promise<void> {
@@ -282,6 +301,12 @@ class PersistentOAuthStore implements OAuthRegisteredClientsStore {
       throw new InvalidClientMetadataError(problem);
     }
     return this.mutate(() => {
+      if (!this.state.clients[registered.client_id] &&
+          Object.keys(this.state.clients).length >= this.maxRegisteredClients) {
+        throw new InvalidClientMetadataError(
+          `Registered client limit reached: ${this.maxRegisteredClients}`,
+        );
+      }
       this.state.clients[registered.client_id] = registered;
       return registered;
     });
@@ -511,6 +536,7 @@ export class RemoteDevOAuthProvider implements OAuthServerProvider {
       config.oauthStateFile,
       config.oauthAccessTokenTtlSeconds,
       config.oauthRefreshTokenTtlSeconds,
+      config.oauthMaxRegisteredClients,
     );
   }
 

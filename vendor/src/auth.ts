@@ -93,3 +93,31 @@ export function createHostValidation(config: AppConfig): RequestHandler {
     next();
   };
 }
+
+export function createOriginValidation(config: AppConfig): RequestHandler {
+  return (request, response, next) => {
+    const supplied = request.header("origin");
+    if (supplied === undefined) {
+      next();
+      return;
+    }
+    let origin: string | undefined;
+    try {
+      const parsed = new URL(supplied);
+      if (parsed.origin !== "null") {
+        origin = parsed.origin;
+      }
+    } catch {
+      // Invalid and opaque origins receive the same response.
+    }
+    if (!origin || !config.allowedOrigins?.includes(origin)) {
+      response.status(403).json({
+        jsonrpc: "2.0",
+        error: { code: -32003, message: "Origin is not allowed" },
+        id: null,
+      });
+      return;
+    }
+    next();
+  };
+}

@@ -63,6 +63,8 @@ describe("loadConfig", () => {
       oauthIssuerUrl: "https://mcp.example.com/",
       oauthResourceUrl: "https://mcp.example.com/mcp",
       oauthStateFile: path.join(temporaryPath, "oauth-state.json"),
+      allowedOrigins: ["https://mcp.example.com"],
+      oauthMaxRegisteredClients: 256,
     });
   });
 
@@ -108,5 +110,14 @@ describe("loadConfig", () => {
         "/tmp",
       ),
     ).toThrow("must not contain user credentials");
+    expect(() =>
+      loadConfig(
+        {
+          MCP_AUTH_TOKEN: "secret",
+          MCP_ALLOWED_ORIGINS: "https://mcp.example.com/path",
+        },
+        "/tmp",
+      ),
+    ).toThrow("must be origins");
   });
 });
