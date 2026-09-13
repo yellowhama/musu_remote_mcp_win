@@ -329,6 +329,8 @@ export async function startHttpServer(
     const listeningServer = app.listen(config.port, config.host, () => resolve(listeningServer));
     listeningServer.once("error", reject);
   });
+  // Keep foreground and service runtimes alive even if a dependency unrefs the listener.
+  httpServer.ref();
 
   const close = async (): Promise<void> => {
     clearInterval(cleanupInterval);

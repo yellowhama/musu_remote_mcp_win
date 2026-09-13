@@ -65,6 +65,8 @@ test('Windows native entrypoint serves health and protects MCP', { skip: process
       headers: { Host: 'localhost', Authorization: `Bearer ${metricsKey}` },
     });
     assert.equal(metricsResponse.status, 200);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    assert.equal(child.exitCode, null, `native runtime exited after startup\n${stderr}`);
   } finally {
     if (child.exitCode === null) {
       child.kill();
