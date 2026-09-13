@@ -1,10 +1,10 @@
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-
+import { McpServer } from "@modelcontextprotocol/server";
 import type { AppConfig } from "./config.js";
 import { registerExecTools } from "./exec-tools.js";
 import { FileService } from "./file-service.js";
 import { registerFileTools } from "./file-tools.js";
 import { ProcessManager } from "./process-manager.js";
+import { createToolRegistrar } from "./tool-registry.js";
 
 export interface McpServices {
   processManager: ProcessManager;
@@ -40,13 +40,14 @@ export function createMcpServer(config: AppConfig, services: McpServices): McpSe
       capabilities: { logging: {} },
     },
   );
+  const tools = createToolRegistrar(server);
 
   registerExecTools(
-    server,
+    tools,
     config,
     services.processManager,
     services.fileService,
   );
-  registerFileTools(server, config, services.fileService);
+  registerFileTools(tools, config, services.fileService);
   return server;
 }

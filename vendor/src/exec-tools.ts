@@ -1,4 +1,3 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 
 import type { AppConfig } from "./config.js";
@@ -7,6 +6,7 @@ import { ProcessManager } from "./process-manager.js";
 import { runScript } from "./script-runner.js";
 import { runTool } from "./tool-result.js";
 import { TOOL_ANNOTATIONS, toolAuthMetadata } from "./tool-metadata.js";
+import type { ToolRegistrar } from "./tool-registry.js";
 
 function shellArguments(executable: string, login: boolean, command: string): string[] {
   if (process.platform !== "win32") {
@@ -30,7 +30,7 @@ function processResult(result: Awaited<ReturnType<ProcessManager["read"]>>): Rec
 }
 
 export function registerExecTools(
-  server: McpServer,
+  server: ToolRegistrar,
   config: AppConfig,
   processManager: ProcessManager,
   fileService: FileService,
@@ -74,34 +74,34 @@ export function registerExecTools(
       title: "Execute command",
       description:
         "Run an unrestricted shell command on the host. The command inherits the MCP server's full OS permissions, environment, filesystem, and network access. A successful start always returns a process session ID, current process state, and retained output; poll a running process with read_process or write_stdin.",
-      inputSchema: {
-        cmd: z.string().min(1).describe("Shell command or script to execute."),
-        workdir: z
-          .string()
-          .optional()
-          .describe(`Working directory. Relative paths resolve from ${config.defaultCwd}.`),
-        shell: z
-          .string()
-          .optional()
-          .describe(`Shell executable. Defaults to ${config.defaultShell}.`),
-        login: z
-          .boolean()
-          .default(true)
-          .describe("Use login-shell semantics on POSIX. Windows shells ignore this option."),
-        env: environmentSchema,
-        stdin: z.string().optional().describe("Initial text written to stdin after spawn."),
-        timeoutMs: timeoutSchema,
-        yieldTimeMs: z
-          .number()
-          .int()
-          .min(0)
-          .max(30_000)
-          .default(10_000)
-          .describe(
-            "How long to wait for the process to exit before returning its current state. Zero returns immediately.",
-          ),
-        maxOutputBytes: maxOutputBytesSchema,
-      },
+      inputSchema: z.object({
+              cmd: z.string().min(1).describe("Shell command or script to execute."),
+              workdir: z
+                .string()
+                .optional()
+                .describe(`Working directory. Relative paths resolve from ${config.defaultCwd}.`),
+              shell: z
+                .string()
+                .optional()
+                .describe(`Shell executable. Defaults to ${config.defaultShell}.`),
+              login: z
+                .boolean()
+                .default(true)
+                .describe("Use login-shell semantics on POSIX. Windows shells ignore this option."),
+              env: environmentSchema,
+              stdin: z.string().optional().describe("Initial text written to stdin after spawn."),
+              timeoutMs: timeoutSchema,
+              yieldTimeMs: z
+                .number()
+                .int()
+                .min(0)
+                .max(30_000)
+                .default(10_000)
+                .describe(
+                  "How long to wait for the process to exit before returning its current state. Zero returns immediately.",
+                ),
+              maxOutputBytes: maxOutputBytesSchema,
+            }),
       annotations: TOOL_ANNOTATIONS.destructiveNonIdempotentOpen,
       _meta: authMetadata,
     },
@@ -142,45 +142,45 @@ export function registerExecTools(
       title: "Run script",
       description:
         "Write a supplied script to a temporary executable file and run it with Bash, sh, Node.js, Python, or an arbitrary interpreter. Execution is unrestricted and has the MCP server's full host permissions. A successful start always returns a process session ID, current process state, and retained output.",
-      inputSchema: {
-        runtime: z
-          .enum(["bash", "sh", "powershell", "node", "python", "custom"])
-          .default(process.platform === "win32" ? "powershell" : "bash")
-          .describe("Script runtime. Use custom with interpreter for any other runtime."),
-        script: z.string().describe("Complete script source."),
-        workdir: z
-          .string()
-          .optional()
-          .describe(`Working directory. Relative paths resolve from ${config.defaultCwd}.`),
-        args: z.array(z.string()).default([]).describe("Arguments passed after the script path."),
-        env: environmentSchema,
-        interpreter: z
-          .string()
-          .optional()
-          .describe("Interpreter executable override. Required for runtime=custom."),
-        interpreterArgs: z
-          .array(z.string())
-          .default([])
-          .describe("Arguments placed before the temporary script path."),
-        stdin: z.string().optional().describe("Initial text written to the script stdin."),
-        timeoutMs: timeoutSchema,
-        yieldTimeMs: z
-          .number()
-          .int()
-          .min(0)
-          .max(30_000)
-          .default(10_000)
-          .describe(
-            "How long to wait for the script process to exit before returning its current state. Zero returns immediately.",
-          ),
-        maxOutputBytes: maxOutputBytesSchema,
-        keepScript: z
-          .boolean()
-          .default(false)
-          .describe(
-            "Keep the temporary script after process exit and include its path in the result. When false, the temporary directory is removed after exit.",
-          ),
-      },
+      inputSchema: z.object({
+              runtime: z
+                .enum(["bash", "sh", "powershell", "node", "python", "custom"])
+                .default(process.platform === "win32" ? "powershell" : "bash")
+                .describe("Script runtime. Use custom with interpreter for any other runtime."),
+              script: z.string().describe("Complete script source."),
+              workdir: z
+                .string()
+                .optional()
+                .describe(`Working directory. Relative paths resolve from ${config.defaultCwd}.`),
+              args: z.array(z.string()).default([]).describe("Arguments passed after the script path."),
+              env: environmentSchema,
+              interpreter: z
+                .string()
+                .optional()
+                .describe("Interpreter executable override. Required for runtime=custom."),
+              interpreterArgs: z
+                .array(z.string())
+                .default([])
+                .describe("Arguments placed before the temporary script path."),
+              stdin: z.string().optional().describe("Initial text written to the script stdin."),
+              timeoutMs: timeoutSchema,
+              yieldTimeMs: z
+                .number()
+                .int()
+                .min(0)
+                .max(30_000)
+                .default(10_000)
+                .describe(
+                  "How long to wait for the script process to exit before returning its current state. Zero returns immediately.",
+                ),
+              maxOutputBytes: maxOutputBytesSchema,
+              keepScript: z
+                .boolean()
+                .default(false)
+                .describe(
+                  "Keep the temporary script after process exit and include its path in the result. When false, the temporary directory is removed after exit.",
+                ),
+            }),
       annotations: TOOL_ANNOTATIONS.destructiveNonIdempotentOpen,
       _meta: authMetadata,
     },
@@ -223,28 +223,28 @@ export function registerExecTools(
       title: "Write to process stdin",
       description:
         "Write text to an existing process session, optionally close stdin, then return current process state and retained output with sequence numbers greater than afterSeq.",
-      inputSchema: {
-        sessionId: sessionIdSchema,
-        chars: z
-          .string()
-          .default("")
-          .describe("Text to write to the process stdin. An empty value writes nothing."),
-        closeStdin: z
-          .boolean()
-          .default(false)
-          .describe("Close the process stdin after writing chars."),
-        afterSeq: afterSeqSchema,
-        yieldTimeMs: z
-          .number()
-          .int()
-          .min(0)
-          .max(300_000)
-          .default(250)
-          .describe(
-            "When stdin remains open, wait this long for output or process exit. When closeStdin=true, wait this long for process exit before returning.",
-          ),
-        maxOutputBytes: maxOutputBytesSchema,
-      },
+      inputSchema: z.object({
+              sessionId: sessionIdSchema,
+              chars: z
+                .string()
+                .default("")
+                .describe("Text to write to the process stdin. An empty value writes nothing."),
+              closeStdin: z
+                .boolean()
+                .default(false)
+                .describe("Close the process stdin after writing chars."),
+              afterSeq: afterSeqSchema,
+              yieldTimeMs: z
+                .number()
+                .int()
+                .min(0)
+                .max(300_000)
+                .default(250)
+                .describe(
+                  "When stdin remains open, wait this long for output or process exit. When closeStdin=true, wait this long for process exit before returning.",
+                ),
+              maxOutputBytes: maxOutputBytesSchema,
+            }),
       annotations: TOOL_ANNOTATIONS.destructiveNonIdempotentOpen,
       _meta: authMetadata,
     },
@@ -269,20 +269,20 @@ export function registerExecTools(
       title: "Read process output",
       description:
         "Poll a managed process for output and terminal state. Pass the previous nextSeq as afterSeq to receive only newer output.",
-      inputSchema: {
-        sessionId: sessionIdSchema,
-        afterSeq: afterSeqSchema,
-        waitMs: z
-          .number()
-          .int()
-          .min(0)
-          .max(300_000)
-          .default(1000)
-          .describe(
-            "How long to wait for output newer than afterSeq or for process exit. Zero returns immediately.",
-          ),
-        maxOutputBytes: maxOutputBytesSchema,
-      },
+      inputSchema: z.object({
+              sessionId: sessionIdSchema,
+              afterSeq: afterSeqSchema,
+              waitMs: z
+                .number()
+                .int()
+                .min(0)
+                .max(300_000)
+                .default(1000)
+                .describe(
+                  "How long to wait for output newer than afterSeq or for process exit. Zero returns immediately.",
+                ),
+              maxOutputBytes: maxOutputBytesSchema,
+            }),
       annotations: TOOL_ANNOTATIONS.readOnlyClosed,
       _meta: authMetadata,
     },
@@ -304,22 +304,22 @@ export function registerExecTools(
       title: "Terminate process",
       description:
         "Send a signal to a managed process tree. When graceMs is greater than zero, SIGINT and SIGTERM escalate to SIGKILL if the process is still running after the grace period. The call may return while escalation is still pending.",
-      inputSchema: {
-        sessionId: sessionIdSchema,
-        signal: z
-          .enum(["SIGINT", "SIGTERM", "SIGKILL"])
-          .default("SIGTERM")
-          .describe("Signal sent to the managed process tree."),
-        graceMs: z
-          .number()
-          .int()
-          .min(0)
-          .max(60_000)
-          .default(3000)
-          .describe(
-            "For SIGINT or SIGTERM, milliseconds before SIGKILL escalation; zero disables escalation. The call waits at most one second before returning.",
-          ),
-      },
+      inputSchema: z.object({
+              sessionId: sessionIdSchema,
+              signal: z
+                .enum(["SIGINT", "SIGTERM", "SIGKILL"])
+                .default("SIGTERM")
+                .describe("Signal sent to the managed process tree."),
+              graceMs: z
+                .number()
+                .int()
+                .min(0)
+                .max(60_000)
+                .default(3000)
+                .describe(
+                  "For SIGINT or SIGTERM, milliseconds before SIGKILL escalation; zero disables escalation. The call waits at most one second before returning.",
+                ),
+            }),
       annotations: TOOL_ANNOTATIONS.destructiveNonIdempotentClosed,
       _meta: authMetadata,
     },
@@ -334,7 +334,7 @@ export function registerExecTools(
     {
       title: "List managed processes",
       description: "List running and recently completed process sessions.",
-      inputSchema: {},
+      inputSchema: z.object({}),
       annotations: TOOL_ANNOTATIONS.readOnlyClosed,
       _meta: authMetadata,
     },

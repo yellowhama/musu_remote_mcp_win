@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import type { Server as HttpServer } from "node:http";
-
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { createOAuthMetadata, mcpAuthRouter } from "@modelcontextprotocol/server-legacy/auth";
+import type { AuthRouterOptions } from "@modelcontextprotocol/server-legacy/auth";
+import { createMcpHandler, isLegacyRequest } from "@modelcontextprotocol/server";
 import {
-  createOAuthMetadata,
-  mcpAuthRouter,
-  type AuthRouterOptions,
-} from "@modelcontextprotocol/sdk/server/auth/router.js";
+  NodeStreamableHTTPServerTransport,
+  toNodeHandler,
+  toWebRequest,
+} from "@modelcontextprotocol/node";
 import express, { type Request, type Response } from "express";
 
 import { createBearerAuth, createHostValidation, createOriginValidation } from "./auth.js";
@@ -14,10 +15,6 @@ import type { AppConfig } from "./config.js";
 import { errorMessage } from "./errors.js";
 import { createMcpServer, type McpServices } from "./mcp-server.js";
 import { OAUTH_SCOPES, RemoteDevOAuthProvider } from "./oauth.js";
-
-interface ActiveRequest {
-  server: ReturnType<typeof createMcpServer>;
-}
 
 export interface RunningHttpServer {
   httpServer: HttpServer;
@@ -99,7 +96,6 @@ export async function startHttpServer(
   app.use(createHostValidation(config));
   app.use(createOriginValidation(config));
 
-  const activeRequests = new Set<ActiveRequest>();
   let activeMcpRequests = 0;
   const oauthProvider = config.oauthEnabled ? new RemoteDevOAuthProvider(config) : undefined;
   if (oauthProvider) {
@@ -145,13 +141,30 @@ export async function startHttpServer(
   }
   const authenticate = createBearerAuth(config, oauthProvider);
   const parseMcpJson = express.json({ limit: config.maxRequestBody });
+  const modernMcpHandler = createMcpHandler(
+    () => createMcpServer(config, services),
+    {
+      legacy: "reject",
+      responseMode: "json",
+      onerror: (error) => {
+        console.error("MCP handler error:", errorMessage(error));
+      },
+    },
+  );
+  const modernNodeHandler = toNodeHandler(modernMcpHandler, {
+    onerror: (error) => {
+      console.error("MCP Node adapter error:", errorMessage(error));
+    },
+  });
+  const activeLegacyServers = new Set<ReturnType<typeof createMcpServer>>();
 
   app.get("/health", (_request, response) => {
     response.json({
       status: "ok",
       service: "cokacremote",
       version: "0.1.0",
-      transportMode: "stateless-json",
+      transportMode: "dual-era-stateless",
+      protocolVersions: ["2026-07-28", "2025-11-25"],
       activeMcpSessions: 0,
       activeMcpRequests,
       managedProcesses: services.processManager.list().length,
@@ -160,41 +173,57 @@ export async function startHttpServer(
     });
   });
 
-  const postHandler = async (request: Request, response: Response): Promise<void> => {
-    const transport = new StreamableHTTPServerTransport({
+  const handleLegacyRequest = async (request: Request, response: Response): Promise<void> => {
+    const transport = new NodeStreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
     });
     const server = createMcpServer(config, services);
-    const activeRequest = { server };
-    activeRequests.add(activeRequest);
-    activeMcpRequests += 1;
+    activeLegacyServers.add(server);
     let closed = false;
     const closeRequest = async (): Promise<void> => {
       if (closed) {
         return;
       }
       closed = true;
-      activeRequests.delete(activeRequest);
-      activeMcpRequests = Math.max(0, activeMcpRequests - 1);
+      activeLegacyServers.delete(server);
       await server.close().catch((error) => {
-        console.error("Failed to close MCP request:", errorMessage(error));
+        console.error("Failed to close legacy MCP request:", errorMessage(error));
       });
     };
     response.once("finish", () => void closeRequest());
     response.once("close", () => void closeRequest());
     try {
       transport.onerror = (error) => {
-        console.error("MCP transport error:", errorMessage(error));
+        console.error("Legacy MCP transport error:", errorMessage(error));
       };
       await server.connect(transport);
       await transport.handleRequest(request, response, request.body);
+    } catch (error) {
+      console.error("Legacy MCP POST failed:", errorMessage(error));
+      if (!response.headersSent) {
+        rpcError(response, 500, "Internal MCP server error");
+      }
+      await closeRequest();
+    }
+  };
+
+  const postHandler = async (request: Request, response: Response): Promise<void> => {
+    activeMcpRequests += 1;
+    try {
+      const webRequest = await toWebRequest(request, request.body);
+      if (await isLegacyRequest(webRequest, request.body)) {
+        await handleLegacyRequest(request, response);
+      } else {
+        await modernNodeHandler(request, response, request.body);
+      }
     } catch (error) {
       console.error("MCP POST failed:", errorMessage(error));
       if (!response.headersSent) {
         rpcError(response, 500, "Internal MCP server error");
       }
-      await closeRequest();
+    } finally {
+      activeMcpRequests = Math.max(0, activeMcpRequests - 1);
     }
   };
 
@@ -239,10 +268,11 @@ export async function startHttpServer(
 
   const close = async (): Promise<void> => {
     clearInterval(cleanupInterval);
-    const requests = [...activeRequests];
-    activeRequests.clear();
     activeMcpRequests = 0;
-    await Promise.allSettled(requests.map((request) => request.server.close()));
+    await modernMcpHandler.close();
+    const legacyServers = [...activeLegacyServers];
+    activeLegacyServers.clear();
+    await Promise.allSettled(legacyServers.map((server) => server.close()));
     await services.processManager.shutdown();
     await new Promise<void>((resolve, reject) => {
       httpServer.close((error) => {

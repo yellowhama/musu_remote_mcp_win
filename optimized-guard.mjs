@@ -1,4 +1,3 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -19,10 +18,11 @@ const snapshot=snapshotter({roots,backupRoot,maxFiles:200000,maxFileBytes:256*10
 const fastSnapshot=snapshotter({roots,backupRoot,maxFiles:2000,maxFileBytes:128*1024*1024,maxTotalBytes:512*1024**2,workers:4,minFreeBytes});
 const gate=createMutationGate(async()=>({kind:'target-or-job'}),8);
 const jobs=await openJobs(jobsRoot);
-const callbacks=new Map(), registrations=new WeakSet(), processOwners=new Map();
+const processOwners=new Map();
 const result=data=>({content:[{type:'text',text:JSON.stringify(data)}],structuredContent:data});
 const wrapped=operation=>async(...args)=>{try{return await operation(...args);}catch(e){return {...result({error:e.message}),isError:true};}};
-const owner=extra=>{const id=extra?.authInfo?.clientId;if(!id)throw new Error('Authenticated OAuth client required');return id;};
+const owner=extra=>{const id=extra?.http?.authInfo?.clientId;if(!id)throw new Error('Authenticated OAuth client required');return id;};
+const requestSignal=extra=>extra?.mcpReq?.signal;
 const instructions=` Editable roots: ${roots.join(', ')}. Read repository instructions before mutation. Direct mutations get target byte backups; shell/script/patch and large trees use submit_job then get_job. Preserve recovery evidence. Same-UID shell is not a security sandbox.`;
 const deferred=new Set(['exec_command','run_script','apply_patch']);
 const single=new Set(['write_file','replace_in_file','upload_file','make_directory','remove_path','chmod_path']);
@@ -39,9 +39,11 @@ async function targetsFor(name,args) {
   if(paths.some(p=>roots.some(root=>inside(root,p)&&inside(p,root))))throw new Error('Workspace-root mutation rejected');
   return paths;
 }
-const original=McpServer.prototype.registerTool;
-McpServer.prototype.registerTool=function(name,config,callback){
-  callbacks.set(name,{config,callback});config.description+=instructions;
+export function createGuardedToolRegistrar(base){
+ const callbacks=new Map();let registeredJobTools=false;
+ const registerTool=(name,config,callback)=>{
+  config={...config,description:`${config.description||''}${instructions}`};
+  callbacks.set(name,{config,callback});
   let handler=callback;
   if(['write_stdin','terminate_process','read_process'].includes(name))handler=wrapped(async(args,extra)=>{
     if(processOwners.get(args.sessionId)!==owner(extra))throw new Error('Process not owned by this OAuth client');
@@ -51,23 +53,26 @@ McpServer.prototype.registerTool=function(name,config,callback){
   else if(deferred.has(name))handler=wrapped(async()=>{throw new Error(`Use submit_job with tool=${name}, arguments and unique requestKey; full backup precedes execution asynchronously.`);});
   else if(config.annotations?.readOnlyHint!==true)handler=wrapped(async(args,extra)=>{
     return gate(name,async()=>{
-      const proof=await fastSnapshot(await targetsFor(name,args),{signal:extra?.signal,tool:name});
-      await proof.verify();extra?.signal?.throwIfAborted();
+      const signal=requestSignal(extra);
+      const proof=await fastSnapshot(await targetsFor(name,args),{signal,tool:name});
+      await proof.verify();signal?.throwIfAborted();
       const output=await callback(args,extra);
       return {...output,structuredContent:{...output.structuredContent,checkpoint:{id:proof.id,count:proof.count,totalBytes:proof.totalBytes}}};
-    },extra?.signal);
+    },requestSignal(extra));
   });
-  const registration=original.call(this,name,config,handler);
-  if(!registrations.has(this)){
-    registrations.add(this);const meta=config._meta;
-    original.call(this,'submit_job',{description:'Queue full code AND wiki backup then execution; returns job ID immediately. Reuse requestKey for safe retry; poll get_job. Shell can access other mounted paths, which this snapshot does not protect.'+instructions,inputSchema:{requestKey:z.string().min(1).max(128),tool:z.enum(['checkpoint','exec_command','run_script','apply_patch','copy_path','move_path','remove_path']),arguments:z.record(z.string(),z.unknown()).default({})},annotations:{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:true},_meta:meta},wrapped(async(args,extra)=>{
+  const registration=base.registerTool(name,config,handler);
+  if(!registeredJobTools){
+    registeredJobTools=true;const meta=config._meta;
+    base.registerTool('submit_job',{description:'Queue full code AND wiki backup then execution; returns job ID immediately. Reuse requestKey for safe retry; poll get_job. Shell can access other mounted paths, which this snapshot does not protect.'+instructions,inputSchema:z.object({requestKey:z.string().min(1).max(128),tool:z.enum(['checkpoint','exec_command','run_script','apply_patch','copy_path','move_path','remove_path']),arguments:z.record(z.string(),z.unknown()).default({})}),annotations:{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:true},_meta:meta},wrapped(async(args,extra)=>{
       const client=owner(extra),record=callbacks.get(args.tool);
-      const parsed=args.tool==='checkpoint'?{}:z.object(record.config.inputSchema).parse(args.arguments);
+      if(args.tool!=='checkpoint'&&!record)throw new Error(`Tool is not registered: ${args.tool}`);
+      const schema=record?.config?.inputSchema;
+      const parsed=args.tool==='checkpoint'?{}:typeof schema?.parse==='function'?schema.parse(args.arguments):z.object(schema||{}).parse(args.arguments);
       if(parsed.cwd)await safePath(parsed.cwd,roots[0],roots);
       if(parsed.workdir)await safePath(parsed.workdir,roots[0],roots);
       if(['copy_path','move_path','remove_path'].includes(args.tool))await targetsFor(args.tool,parsed);
       return result(await jobs.submit(client,args.requestKey,{tool:args.tool,arguments:parsed},async({signal,update})=>{
-        const executionExtra={...extra,signal};
+        const executionExtra={...extra,mcpReq:{...extra.mcpReq,signal}};
         return gate(args.tool,async()=>{
           let lastProgress=0;
           const proof=await snapshot(roots,{full:true,signal,tool:args.tool,progress:p=>{if(Date.now()-lastProgress>2000){lastProgress=Date.now();void update({progress:p}).catch(()=>{});}}});
@@ -90,8 +95,12 @@ McpServer.prototype.registerTool=function(name,config,callback){
         },signal);
       }));
     }));
-    original.call(this,'get_job',{description:'Get your job state, progress, checkpoint and bounded result. No source scan.',inputSchema:{jobId:z.string().uuid()},annotations:{readOnlyHint:true},_meta:meta},wrapped(async(args,extra)=>result(jobs.get(args.jobId,owner(extra)))));
-    original.call(this,'cancel_job',{description:'Cancel your queued/backup job or stop its managed process. Does not roll back effects.',inputSchema:{jobId:z.string().uuid()},annotations:{readOnlyHint:false,destructiveHint:true},_meta:meta},wrapped(async(args,extra)=>result(await jobs.cancel(args.jobId,owner(extra)))));
+    base.registerTool('get_job',{description:'Get your job state, progress, checkpoint and bounded result. No source scan.',inputSchema:z.object({jobId:z.string().uuid()}),annotations:{readOnlyHint:true},_meta:meta},wrapped(async(args,extra)=>result(jobs.get(args.jobId,owner(extra)))));
+    base.registerTool('cancel_job',{description:'Cancel your queued/backup job or stop its managed process. Does not roll back effects.',inputSchema:z.object({jobId:z.string().uuid()}),annotations:{readOnlyHint:false,destructiveHint:true},_meta:meta},wrapped(async(args,extra)=>result(await jobs.cancel(args.jobId,owner(extra)))));
   }
   return registration;
-};
+ };
+ return {registerTool};
+}
+
+globalThis.__musuToolRegistrarFactory=createGuardedToolRegistrar;

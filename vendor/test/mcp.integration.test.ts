@@ -2,9 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { loadConfig, type AppConfig } from "../src/config.js";
@@ -87,7 +85,10 @@ describe("remote development MCP server", () => {
   });
 
   it("lists tools and executes script and file workflows", async () => {
-    const client = new Client({ name: "integration-test", version: "1.0.0" });
+    const client = new Client(
+      { name: "integration-test", version: "1.0.0" },
+      { versionNegotiation: { mode: "auto" } },
+    );
     const transport = new StreamableHTTPClientTransport(endpoint, {
       requestInit: {
         headers: { Authorization: "Bearer integration-secret" },
@@ -96,6 +97,8 @@ describe("remote development MCP server", () => {
     await client.connect(transport);
     try {
       expect(transport.sessionId).toBeUndefined();
+      expect(client.getProtocolEra()).toBe("modern");
+      expect(client.getNegotiatedProtocolVersion()).toBe("2026-07-28");
       expect(client.getServerVersion()).toMatchObject({
         name: "cokacremote",
         version: "0.1.0",
@@ -181,6 +184,10 @@ describe("remote development MCP server", () => {
     expect(initializeResponse.headers.get("x-request-id")).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
+    const initialized = (await initializeResponse.json()) as {
+      result?: { protocolVersion?: string };
+    };
+    expect(initialized.result?.protocolVersion).toBe("2025-11-25");
 
     const listResponse = await post(
       {
@@ -260,7 +267,8 @@ describe("remote development MCP server", () => {
     const healthResponse = await fetch(new URL("/health", endpoint));
     expect(await healthResponse.json()).toMatchObject({
       status: "ok",
-      transportMode: "stateless-json",
+      transportMode: "dual-era-stateless",
+      protocolVersions: ["2026-07-28", "2025-11-25"],
       activeMcpSessions: 0,
       activeMcpRequests: 0,
     });

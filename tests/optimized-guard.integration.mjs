@@ -5,7 +5,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 
 const disposableRoot = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'musu-guard-integration-')));
@@ -23,20 +22,21 @@ await fs.writeFile(path.join(codeRoot, 'code.txt'), 'original code 한글');
 await fs.writeFile(path.join(wikiRoot, 'page.md'), 'original wiki 한글');
 after(async () => fs.rm(disposableRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 const captured = new Map();
-McpServer.prototype.registerTool = function(name, config, callback) {
+const base = { registerTool(name, config, callback) {
   captured.set(name, { config, callback });
   return {};
-};
-await import('../optimized-guard.mjs');
-const server = new McpServer({ name: 'disposable-guard-test', version: '1.0.0' });
+} };
+const { createGuardedToolRegistrar } = await import('../optimized-guard.mjs');
+const server = createGuardedToolRegistrar(base);
 const respond = data => ({ content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data });
-const extra = clientId => ({ authInfo: { clientId }, signal: new AbortController().signal });
+const extra = clientId => ({ http: { authInfo: { clientId } }, mcpReq: { signal: new AbortController().signal } });
 async function call(name, input, clientId = 'alice') {
   const { config, callback } = captured.get(name);
-  return callback(z.object(config.inputSchema).parse(input), extra(clientId));
+  const schema = typeof config.inputSchema?.parse === 'function' ? config.inputSchema : z.object(config.inputSchema);
+  return callback(schema.parse(input), extra(clientId));
 }
 function register(name, inputSchema, callback, readOnlyHint = false) {
-  server.registerTool(name, { description: name, inputSchema, annotations: { readOnlyHint } }, callback);
+  server.registerTool(name, { description: name, inputSchema: z.object(inputSchema), annotations: { readOnlyHint } }, callback);
 }
 let execCalls = 0, stdinCalls = 0, terminateCalls = 0;
 const sessions = new Map(), observedAfterSeq = [];
