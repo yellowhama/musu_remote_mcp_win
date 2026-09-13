@@ -196,3 +196,96 @@ test('symlinked backup objects are refused instead of following unrelated data',
   await assert.rejects(restoreToNewDirectory(m, f.backupRoot, path.join(f.base, 'symlink-object-restore')), { code: 'ELOOP' });
   assert.equal(await fs.readFile(file, 'utf8'), 'original');
 });
+
+test('USN hash index reuses unchanged files and rehashes only changed file IDs', async t => {
+  let nextUsn = 100;
+  let records = [];
+  const journal = {
+    query: async () => ({ journalId: 'abc', firstUsn: '1', nextUsn: String(nextUsn) }),
+    read: async startUsn => ({
+      journalId: 'abc', firstUsn: '1', nextUsn: String(nextUsn),
+      records: records.filter(record => BigInt(record.usn) >= BigInt(startUsn)),
+    }),
+  };
+  const f = await fixture(t, { journal });
+  const firstPath = path.join(f.roots[0], 'first.txt');
+  const secondPath = path.join(f.roots[0], 'second.txt');
+  await fs.writeFile(firstPath, 'first');
+  await fs.writeFile(secondPath, 'second');
+
+  const baseline = await f.snapshot(f.roots, { full: true });
+  assert.equal(baseline.strategy, 'full-scan');
+  assert.equal(baseline.hashedFiles, 2);
+
+  const unchanged = await f.snapshot(f.roots, { full: true });
+  assert.equal(unchanged.strategy, 'usn-incremental');
+  assert.equal(unchanged.hashedFiles, 0);
+  assert.equal(unchanged.reusedFiles, 2);
+
+  const index = JSON.parse(await fs.readFile(path.join(f.backupRoot, 'indexes', 'full-snapshot.json'), 'utf8'));
+  await fs.writeFile(secondPath, 'second changed');
+  nextUsn += 10;
+  records = [{ usn: '105', fileId: index.items[secondPath].fileId, parentId: index.items[f.roots[0]].fileId, directory: false }];
+  const changed = await f.snapshot(f.roots, { full: true });
+  assert.equal(changed.strategy, 'usn-incremental');
+  assert.equal(changed.hashedFiles, 1);
+  assert.equal(changed.reusedFiles, 1);
+  assert.equal((await f.manifest(changed)).entries[secondPath].size, Buffer.byteLength('second changed'));
+});
+
+test('USN directory changes and journal resets fall back to a full hash scan', async t => {
+  let journalId = 'abc';
+  let records = [];
+  const journal = {
+    query: async () => ({ journalId, firstUsn: '1', nextUsn: '100' }),
+    read: async startUsn => ({
+      journalId, firstUsn: '1', nextUsn: '100',
+      records: records.filter(record => BigInt(record.usn) >= BigInt(startUsn)),
+    }),
+  };
+  const f = await fixture(t, { journal });
+  const file = path.join(f.roots[0], 'source.txt');
+  await fs.writeFile(file, 'source');
+  await f.snapshot(f.roots, { full: true });
+  const index = JSON.parse(await fs.readFile(path.join(f.backupRoot, 'indexes', 'full-snapshot.json'), 'utf8'));
+
+  records = [{ usn: '100', fileId: index.items[f.roots[0]].fileId, parentId: index.items[f.roots[0]].fileId, directory: true }];
+  const structural = await f.snapshot(f.roots, { full: true });
+  assert.equal(structural.strategy, 'full-scan');
+  assert.equal(structural.hashedFiles, 1);
+
+  records = [];
+  journalId = 'def';
+  const reset = await f.snapshot(f.roots, { full: true });
+  assert.equal(reset.strategy, 'full-scan');
+  assert.equal(reset.hashedFiles, 1);
+});
+
+test('USN changes that arrive during snapshot verification discard the incremental attempt', async t => {
+  let phase = 'baseline';
+  let incrementalReads = 0;
+  let ids;
+  const journal = {
+    query: async () => ({ journalId: 'abc', firstUsn: '1', nextUsn: phase === 'baseline' ? '100' : '110' }),
+    read: async startUsn => {
+      if (phase === 'baseline') return { journalId: 'abc', firstUsn: '1', nextUsn: '100', records: [] };
+      incrementalReads += 1;
+      const late = incrementalReads >= 2 && BigInt(startUsn) <= 100n;
+      return {
+        journalId: 'abc', firstUsn: '1', nextUsn: late ? '110' : '100',
+        records: late ? [{ usn: '105', fileId: ids.file, parentId: ids.root, directory: false }] : [],
+      };
+    },
+  };
+  const f = await fixture(t, { journal });
+  const file = path.join(f.roots[0], 'source.txt');
+  await fs.writeFile(file, 'source');
+  await f.snapshot(f.roots, { full: true });
+  const index = JSON.parse(await fs.readFile(path.join(f.backupRoot, 'indexes', 'full-snapshot.json'), 'utf8'));
+  ids = { file: index.items[file].fileId, root: index.items[f.roots[0]].fileId };
+  phase = 'incremental';
+
+  const result = await f.snapshot(f.roots, { full: true });
+  assert.equal(result.strategy, 'full-scan');
+  assert.equal(result.hashedFiles, 1);
+});
