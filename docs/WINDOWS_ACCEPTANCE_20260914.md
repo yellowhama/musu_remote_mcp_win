@@ -8,10 +8,12 @@
 | Separate gateway and worker processes | Pass | Native smoke completes DCR, PKCE, token issuance, signed proxying, MCP initialize, and owner-bound job submission |
 | Unsigned/replayed/altered internal request | Pass | Worker returns 401; unit tests bind client, timestamp, nonce, and body hash |
 | Windows Job Object descendant cleanup | Pass | Real PowerShell child/grandchild termination test |
-| Service install, restart, injected upgrade rollback, uninstall | Automated clean-VM gate | GitHub Actions `windows-latest` installs both WinSW services and validates deny ACLs and post-rollback health |
+| Service install, restart, injected upgrade rollback, uninstall | Pass | [GitHub Actions run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) installed both WinSW services, validated deny ACLs, restarted them, reached the intended failure-injection checkpoint, restored health, and uninstalled them |
 | Reboot persistence | Pending external VM | Current workstation session is not elevated and has no Hyper-V module; hosted Actions cannot reboot in place |
 | Real ChatGPT OAuth | Pending external account/tunnel | Requires the operator's ChatGPT developer-mode session and fixed public tunnel |
 | CIMD versus DCR measurement | Ready | `/metrics` exposes bounded success/failure counters by registration method |
+
+The accepted run completed 52 vendor tests with one platform-specific skip, 67 adapter/native tests, dependency audit with zero known vulnerabilities, and the clean-VM service lifecycle. Its logs contain zero unsupported WinSW `refresh` calls and contain the expected injected-failure marker.
 
 ## Current workstation constraint
 

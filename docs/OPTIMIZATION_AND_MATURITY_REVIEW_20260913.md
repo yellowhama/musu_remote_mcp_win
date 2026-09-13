@@ -4,7 +4,7 @@
 
 Musu Remote MCP for Windows is a strong **single-operator beta**. It is suitable for supervised development on a trusted personal workstation. It should not be presented as a hostile-code sandbox, multi-tenant service, or unattended enterprise execution plane.
 
-The implementation moved materially during this audit: request Origin validation, bounded OAuth traffic and metadata, MCP SDK v2 dual-era serving, transactional service installation, retention/GC/disk watermarks, an NTFS USN hash index, and SQLite WAL OAuth state are now implemented and tested.
+The implementation moved materially during this audit: request Origin validation, bounded OAuth traffic and metadata, MCP SDK v2 dual-era serving, separate gateway/worker identities, transactional service installation, retention/GC/disk watermarks, an NTFS USN hash index, and SQLite WAL OAuth state are now implemented and tested.
 
 ## Qualitative scorecard
 
@@ -12,13 +12,13 @@ The implementation moved materially during this audit: request Origin validation
 | --- | ---: | --- |
 | Functional completeness | **9.2/10** | 23 tools, jobs, checkpoints, OAuth, modern and legacy MCP, native service scripts; live ChatGPT connector acceptance is still manual |
 | Security for one trusted operator | **9.3/10** | separate gateway/worker virtual accounts, deny ACLs, body-bound replay-resistant internal HMAC, OAuth audience binding and PKCE; worker remains an unrestricted trusted-code executor |
-| Recovery and operations | **8.9/10** | byte-exact objects, manifests, durable jobs, transactional install rollback, dry-run reachable GC, retention, 10 GiB default watermark; clean-VM reboot/upgrade evidence remains |
+| Recovery and operations | **9.3/10** | byte-exact objects, manifests, durable jobs, clean-VM-tested transactional upgrade rollback, dry-run reachable GC, retention, 10 GiB default watermark; reboot evidence remains |
 | Performance and scalability | **7.8/10** | persistent hash index and NTFS USN deltas reduce unchanged snapshot time by about 67%; safe verification still enumerates and stats the workspace |
-| Architecture and maintainability | **8.6/10** | typed SDK v2 boundary, explicit tool registry, OAuth/CIMD store split, TypeScript workspaces, focused file-content and process-output modules |
+| Architecture and maintainability | **8.8/10** | typed SDK v2 boundary, explicit tool registry, OAuth/CIMD store split, TypeScript workspaces, focused file-content and process-output modules, and explicit gateway/worker roles |
 | Protocol longevity | **9.3/10** | MCP 2026-07-28 and CIMD are supported, 2025-11-25 and DCR remain for compatibility; real ChatGPT negotiation evidence remains |
-| Observability | **8.4/10** | authenticated fixed-cardinality metrics cover HTTP/auth/process/queue/checkpoint/disk; Windows lifecycle failures reach Event Log; dashboards remain operator work |
+| Observability | **8.5/10** | authenticated fixed-cardinality metrics cover HTTP/auth/process/queue/checkpoint/disk; Windows lifecycle failures reach Event Log; dashboards remain operator work |
 
-Weighted overall maturity: **8.8/10 (A- beta)**. The remaining ceiling is real ChatGPT and reboot evidence rather than the core privilege boundary.
+Weighted overall maturity: **9.0/10 (A- beta)**. The remaining release evidence is a real ChatGPT connection and reboot persistence; neither can be proven by the current non-elevated workstation or a hosted runner that cannot reboot in place.
 
 ## Performance evidence
 
@@ -48,7 +48,7 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 
 ### P0 — stable-service gate
 
-1. **Finish external lifecycle evidence.** The clean Windows CI VM covers install, health, restart, injected upgrade rollback, and uninstall. Add a reboot-capable VM run and a real ChatGPT OAuth connection.
+1. **Finish external lifecycle evidence.** [Windows CI run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) covers install, health, restart, the exact injected upgrade rollback checkpoint, and uninstall. Add a reboot-capable VM run and a real ChatGPT OAuth connection.
 
 ### P1 — maintainability and observability
 
@@ -73,9 +73,10 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 ## Verification evidence
 
 - TypeScript typecheck and build: pass.
-- Vendor suite: **43 pass, 1 POSIX-only skip** on Windows.
-- Checkpoint/adapter suite before SQLite change: **65/65 pass**, plus **42 pass and 1 POSIX-only skip** in the vendor suite at that checkpoint.
-- GitHub Actions is green through the SQLite commit (run 34762770787).
+- Vendor suite: **52 pass, 1 POSIX-only skip** on Windows.
+- Adapter/native suite: **67/67 pass**, including real Job Object and two-process gateway/worker smoke tests.
+- Production dependency audit: **0 known vulnerabilities**.
+- Clean-VM service lifecycle: pass in [GitHub Actions run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484).
 
 ## Primary references
 

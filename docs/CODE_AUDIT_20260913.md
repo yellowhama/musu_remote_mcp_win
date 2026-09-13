@@ -17,6 +17,8 @@ No critical correctness defect was found in the current foreground or split-proc
 | Medium | Whole-file OAuth JSON rewrites | SQLite WAL, strict schema, transactions, expiry indexes, legacy migration | OAuth store/integration tests |
 | Medium | OAuth module mixed presentation/provider/storage | storage extracted to `oauth-store.ts` | typecheck and suite |
 | High | CIMD URL retrieval could expose an SSRF path | canonical HTTPS identifiers, public-address filtering, DNS pinning, no redirects, bounded fetch and cache | CIMD unit and OAuth integration tests |
+| High | OAuth gateway and arbitrary-command execution shared one service identity | separate virtual service accounts, deny ACLs, loopback-only worker, body-bound HMAC assertions | two-process smoke test and clean-VM ACL gate |
+| Medium | WinSW 2.12 upgrade path called unsupported `refresh`; the first rollback gate failed before its intended checkpoint | stop existing wrapper, rewrite XML/config while stopped, restart; CI now asserts the exact injected-failure marker | clean-VM run 34769642484, zero `refresh` errors |
 
 ## Current security boundary
 
@@ -42,17 +44,19 @@ The USN index changes the dominant unchanged-workspace cost from hashing all fil
 
 - `npm run typecheck`: pass.
 - `npm run build`: pass.
-- `npm test`: **43 pass, 1 skipped**.
-- OAuth/CIMD-focused tests: **9/9 pass**.
+- Vendor suite: **52 pass, 1 skipped**.
+- Adapter/native suite: **67/67 pass**.
+- OAuth/CIMD and internal-auth focused tests: **19/19 pass**.
+- Production dependency audit: **0 known vulnerabilities**.
 - Git diff whitespace check: pass; Git reports only expected CRLF-to-LF normalization warnings.
-- GitHub Actions: green for Origin, installer, retention, SDK v2, USN, and SQLite commits (run 34762770787).
+- GitHub Actions: [run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) passes build, all Windows tests, service install, ACL separation, restart, exact-point upgrade rollback, and uninstall.
 
 ## Open release gates
 
-1. Separate gateway and worker identities with an ACL-restricted local transport.
-2. Complete a disposable-VM lifecycle test and measure whether a real ChatGPT connector selects CIMD or DCR.
-4. Split the two largest modules and progressively strengthen the migrated adapter's public TypeScript interfaces.
+1. Validate service persistence across a real Windows reboot on a reboot-capable disposable VM.
+2. Measure whether a real ChatGPT connector selects CIMD or DCR through a fixed HTTPS tunnel.
+3. Split the two largest modules and progressively strengthen the migrated adapter's public TypeScript interfaces.
 
 ## Rating
 
-**8.3/10, B+ controlled-use beta.** Core correctness and recovery are strong. Privilege isolation, observability, and lifecycle evidence are the remaining production blockers.
+**9.0/10, A- single-operator beta.** Core correctness, privilege separation, recovery, and clean-VM lifecycle evidence are strong. Reboot persistence and real ChatGPT protocol negotiation remain release evidence gaps.
