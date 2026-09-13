@@ -83,6 +83,7 @@ Object.assign(process.env, {
   MCP_JOBS_ROOT: path.join(stateRoot, 'jobs'),
   MCP_MIN_FREE_BYTES: String(config.retention?.minFreeBytes ?? 10 * 1024 ** 3),
   MCP_WINDOWS_JOB_RUNNER: path.join(projectRoot, 'windows', 'bin', 'MusuJobRunner.exe'),
+  MCP_WINDOWS_EVENT_LOG_SOURCE: 'MusuRemoteMcp',
 });
 
 await import('../adapter/dist/entrypoint.mjs');

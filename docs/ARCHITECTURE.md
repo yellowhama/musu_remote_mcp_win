@@ -8,6 +8,8 @@ The TypeScript SDK v2 handler serves MCP 2026-07-28. A separately routed legacy 
 
 The safety/checkpoint layer lives in the `adapter` TypeScript workspace and emits `.mjs` artifacts to `adapter/dist`; the upstream application lives in the `vendor` TypeScript workspace. The repository root owns the lockfile and dependency tree, so both resolve one reproducible installation without a junction. No global npm packages are required.
 
+File encoding/chunk validation lives in `file-content.ts`, while process UTF-8 stream framing lives in `process-output.ts`. `file-service.ts` and `process-manager.ts` retain filesystem orchestration and process lifecycle responsibilities respectively.
+
 ## Service lifecycle
 
 Foreground mode runs through `windows/Start-Local.ps1`. Service mode uses a checksum-pinned WinSW executable and an XML definition containing absolute executable and configuration paths, delayed automatic start, rolling logs, restart on failure, and a 15-second stop timeout. Secrets are read from `stateRoot` and never placed in service arguments or XML.
@@ -33,3 +35,5 @@ Node's Windows signal emulation does not manage descendants. Every Windows comma
 ## Trust model
 
 The network boundary is OAuth plus the HTTPS tunnel. The filesystem boundary is the Windows service account and NTFS ACLs. The adapter's editable-root checks are recovery and accident controls; unrestricted shell tools intentionally retain all permissions of the service identity.
+
+The authenticated `/metrics` endpoint uses fixed route, status, state, and outcome labels. Adapter telemetry crosses the workspace boundary through Node diagnostics channels, covering mutation queue and checkpoint results without coupling the safety adapter to the HTTP server. Service lifecycle and fatal startup/shutdown failures are also written to the Windows Application Event Log under `MusuRemoteMcp`.

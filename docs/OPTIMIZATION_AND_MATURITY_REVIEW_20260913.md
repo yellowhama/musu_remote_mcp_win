@@ -14,9 +14,9 @@ The implementation moved materially during this audit: request Origin validation
 | Security for one trusted operator | **8.8/10** | loopback bind, Host/Origin checks, OAuth audience binding, PKCE, hashed tokens, bounded DCR and rate limits; gateway and command worker still share one identity |
 | Recovery and operations | **8.9/10** | byte-exact objects, manifests, durable jobs, transactional install rollback, dry-run reachable GC, retention, 10 GiB default watermark; clean-VM reboot/upgrade evidence remains |
 | Performance and scalability | **7.8/10** | persistent hash index and NTFS USN deltas reduce unchanged snapshot time by about 67%; safe verification still enumerates and stats the workspace |
-| Architecture and maintainability | **8.0/10** | typed SDK v2 boundary, explicit tool registry, OAuth store split, TypeScript adapter workspace, and root lockfile; two modules still exceed 680 lines |
+| Architecture and maintainability | **8.6/10** | typed SDK v2 boundary, explicit tool registry, OAuth/CIMD store split, TypeScript workspaces, focused file-content and process-output modules |
 | Protocol longevity | **9.3/10** | MCP 2026-07-28 and CIMD are supported, 2025-11-25 and DCR remain for compatibility; real ChatGPT negotiation evidence remains |
-| Observability | **6.0/10** | health and service logs exist; Windows Event Log events, counters, latency histograms, and operator alerts do not |
+| Observability | **8.4/10** | authenticated fixed-cardinality metrics cover HTTP/auth/process/queue/checkpoint/disk; Windows lifecycle failures reach Event Log; dashboards remain operator work |
 
 Weighted overall maturity: **8.3/10 (B+, approaching A-)**. The ceiling is set by privilege separation and lifecycle evidence rather than core tool behavior.
 
@@ -55,7 +55,7 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 
 1. Split `file-service.ts` (695 lines) and `process-manager.ts` (682 lines) by storage, validation, execution, and lifecycle responsibility.
 2. Progressively replace inferred adapter types with explicit manifest, job, journal, and tool callback contracts.
-3. Emit structured Windows Event Log records and metrics for auth rejection, tool latency/error, queue depth, checkpoint bytes/duration/strategy, disk watermark, process cancellation, and retention.
+3. Add operator dashboards and alerts for the implemented HTTP/auth/process/queue/checkpoint/disk metrics, then extend telemetry to retention and process-cancellation reasons.
 4. Add Cloudflare WAF examples for `/authorize`, `/register`, `/token`, and `/revoke`; keep server-side limits authoritative.
 5. Measure real ChatGPT CIMD/DCR negotiation during a compatibility window, then remove DCR only after the evidence shows it is unused.
 

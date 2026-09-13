@@ -46,7 +46,7 @@ Microsoft documents `icacls` for modifying DACLs on Windows 10/11 and Server. It
 
 Windows junctions are NTFS reparse points and may target another local volume. Root-containment logic must reject junction traversal as well as symbolic links. Source: [Microsoft hard links and junctions](https://learn.microsoft.com/en-us/windows/win32/fileio/hard-links-and-junctions).
 
-Microsoft Job Objects provide the strongest native primitive for containing a process tree, including kill-on-job-close. Node core does not expose Job Objects. This edition uses `taskkill /T /F` for v1 and records Job Object integration as a future hardening step. Source: [Microsoft Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
+Microsoft Job Objects provide the native primitive for containing a process tree, including kill-on-job-close. Node core does not expose Job Objects, so this edition compiles a small C# launcher that assigns itself to a nested kill-on-close Job Object before starting each command. Source: [Microsoft Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects).
 
 ### Service managers
 
@@ -63,10 +63,10 @@ The Docker edition could not be advertised as native Windows without changes:
 | Finding | Consequence | Windows action |
 |---|---|---|
 | `entrypoint.mjs` used `/state` and a flattened `/opt/mcp` build layout | Native startup could not find state or compiled server | Configurable state root and `vendor/dist` import |
-| Root adapter imports expected Docker's root-level `node_modules` | `npm ci --prefix vendor` was insufficient | Installer creates a local junction to the locked vendor dependency tree |
+| Root adapter imports expected Docker's root-level `node_modules` | `npm ci --prefix vendor` was insufficient | Root npm workspace and lockfile provide one dependency tree without a junction |
 | Default shell and arguments were `/bin/bash -lc` | PowerShell/cmd commands failed | Platform-specific shell arguments and PowerShell 7 default |
 | Script runtimes omitted PowerShell and used `python3` | Native scripts were incomplete | Added `powershell`; Windows Python default is `python.exe` |
-| Windows termination called `child.kill()` only | Grandchildren could survive cancellation | `taskkill.exe /T /F` for the whole visible tree |
+| Windows termination called `child.kill()` only | Grandchildren could survive cancellation | Kill-on-close Windows Job Object launcher |
 | Path containment used case-sensitive string prefixes | Drive-letter casing and prefix aliases could misclassify paths | `path.relative` containment and canonical-root checks |
 | Direct mutations rejected symlinks only | Junction and hard-link escapes remained | Junction/symlink rejection and final-file hard-link rejection |
 | Docker provided capabilities, mount, PID, CPU, and memory controls | Native account could see more of the host | Low-privilege service identity plus explicit ACL grants and residual-risk documentation |
@@ -87,7 +87,7 @@ The Docker edition could not be advertised as native Windows without changes:
 
 1. The gateway and execution worker share one Windows identity.
 2. Service mode uses the shared `LocalService` identity. A dedicated managed account is preferable where other local services are not trusted.
-3. `taskkill /T /F` is less robust than assigning every child to a Windows Job Object.
+3. Every managed command tree is assigned to a kill-on-close Windows Job Object.
 4. Backup restore verifies content bytes but does not restore NTFS ACLs, ownership, alternate data streams, symlinks, junctions, or every file attribute.
 5. File-system race resistance is weaker than Linux because Node does not expose `O_NOFOLLOW` on Windows.
 
@@ -107,7 +107,7 @@ The Docker edition could not be advertised as native Windows without changes:
 
 ## Next hardening steps
 
-1. Replace `taskkill` with a small signed Job Object launcher/management helper.
+1. Sign the Job Object launcher and publish release provenance.
 2. Add a dedicated local service-account option and ACL migration test.
 3. Split OAuth gateway and execution worker identities so shell jobs cannot read OAuth state.
 4. Add NTFS ACL metadata backup and restore as an explicit optional format version.

@@ -84,6 +84,7 @@ describe("OAuth 2.1 MCP authorization", () => {
     expect(unauthenticated.headers.get("www-authenticate")).toContain(
       `${baseUrl}/.well-known/oauth-protected-resource/mcp`,
     );
+    expect((await fetch(`${baseUrl}/metrics`)).status).toBe(401);
 
     for (const metadataPath of [
       "/.well-known/oauth-protected-resource",
@@ -236,6 +237,15 @@ describe("OAuth 2.1 MCP authorization", () => {
       scope: string;
     };
     expect(tokens).toMatchObject({ expires_in: 3600, scope: "mcp:tools" });
+
+    const metricsResponse = await fetch(`${baseUrl}/metrics`, {
+      headers: { authorization: `Bearer ${tokens.access_token}` },
+    });
+    expect(metricsResponse.status).toBe(200);
+    const metrics = await metricsResponse.text();
+    expect(metrics).toContain('musu_auth_rejections_total{reason="bearer"} 2');
+    expect(metrics).toContain("musu_workspace_disk_free_bytes");
+    expect(metrics).toContain("musu_checkpoints_total");
 
     await running.close();
     running = await startHttpServer(config, createServices(config));

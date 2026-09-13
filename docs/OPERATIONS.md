@@ -60,3 +60,7 @@ Keep application rate limits enabled even when Cloudflare is present. At the edg
 The server advertises and supports CIMD while retaining DCR for existing clients. Capture whether each real ChatGPT connection presents an HTTPS CIMD client identifier or calls `/register`; keep DCR until a measured compatibility window records zero DCR-dependent clients. A CIMD lookup that resolves to any private or special-purpose address, redirects, exceeds 64 KiB, exceeds five seconds, or returns invalid public-client metadata fails closed.
 
 OAuth state is SQLite WAL. Stop the server before offline copying, and preserve the database plus any `-wal` and `-shm` files and NTFS ACLs as one unit. Node.js 22.13 or newer is required.
+
+## Metrics and Windows events
+
+Scrape `https://your-host.example/metrics` with a valid bearer or OAuth access token. Alert on sustained authentication rejection, non-2xx MCP responses, checkpoint failures, queue saturation, declining free space, and retained process growth. Service mode registers the `MusuRemoteMcp` source in the Windows Application log; event IDs 900–903 cover start, normal stop, shutdown failure, and startup failure.

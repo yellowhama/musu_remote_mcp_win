@@ -97,6 +97,7 @@ $previousServiceConfig = if (Test-Path -LiteralPath $serviceConfig -PathType Lea
 $existingService = if ($Service) { Get-Service -Name 'MusuRemoteMcp' -ErrorAction SilentlyContinue } else { $null }
 $serviceWasRunning = $existingService -and $existingService.Status -eq 'Running'
 $installedNewService = $false
+$createdEventSource = $false
 $aclSnapshots = @{}
 $aclTargets = @($StateRoot)
 if ($Service) { $aclTargets += @($projectRoot) + $roots + @($BackupRoot) }
@@ -117,6 +118,10 @@ try {
     if (-not $administrator) { throw 'Run PowerShell as Administrator when using -Service.' }
     if ($node.StartsWith($env:USERPROFILE, [StringComparison]::OrdinalIgnoreCase) -or $pwsh.StartsWith($env:USERPROFILE, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'Service mode requires system-wide Node.js and PowerShell 7 installations outside the user profile.'
+    }
+    if (-not [Diagnostics.EventLog]::SourceExists('MusuRemoteMcp')) {
+        New-EventLog -LogName Application -Source 'MusuRemoteMcp'
+        $createdEventSource = $true
     }
     New-Item -ItemType Directory -Force -Path $serviceDirectory, (Join-Path $serviceDirectory 'logs') | Out-Null
     if (-not (Test-Path -LiteralPath $serviceExecutable)) {
@@ -182,6 +187,9 @@ try {
             & $serviceExecutable refresh 2>$null
             if ($serviceWasRunning) { & $serviceExecutable start 2>$null }
         }
+    }
+    if ($createdEventSource) {
+        try { Remove-EventLog -Source 'MusuRemoteMcp' } catch { Write-Warning "Failed to remove rolled-back Event Log source: $($_.Exception.Message)" }
     }
     if ($null -ne $previousConfig) { [IO.File]::WriteAllBytes($configFile, $previousConfig) }
     elseif (Test-Path -LiteralPath $configFile -PathType Leaf) { Remove-Item -LiteralPath $configFile -Force }

@@ -13,6 +13,7 @@ This repository is the Windows edition of [remote_dev_mcp](https://github.com/ye
 - Content-addressed backups, bounded queues, idempotency keys, restart recovery
 - Windows path, drive-letter, junction/symlink, hard-link, and process-tree handling
 - Kill-on-close Windows Job Object containment for every command tree
+- Authenticated Prometheus metrics and Windows Application Event Log lifecycle events
 - Verified foreground operation and beta Windows service operation through pinned WinSW
 - Cloudflare named tunnel guidance for a fixed HTTPS endpoint
 
@@ -100,6 +101,8 @@ Quick Tunnels are intended only for testing. Their hostname changes when restart
 4. Enter the approval key only on this server's OAuth approval page.
 
 The authorization-server metadata advertises Client ID Metadata Document (CIMD) support while retaining Dynamic Client Registration (DCR) for existing ChatGPT clients. CIMD documents must use a canonical HTTPS URL and a public network destination; the server pins the resolved address, rejects redirects, and bounds retrieval time and size.
+
+Authenticated operators can scrape `/metrics` with the same bearer/OAuth credentials used for MCP. The fixed-cardinality metrics cover HTTP status and latency, authentication rejection, managed processes, mutation queue depth, checkpoint outcomes/bytes/duration, and workspace free space.
 5. Scan tools and confirm that 23 tools are present.
 6. Start with a read-only request for the repository instruction file.
 

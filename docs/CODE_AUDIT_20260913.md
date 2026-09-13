@@ -29,6 +29,8 @@ The unrestricted command tools can read anything available to the service identi
 - `oauth.ts` fell from roughly 700 lines to 392 lines after storage extraction.
 - `file-service.ts` (695) and `process-manager.ts` (682) remain the main change-risk concentrations.
 - The former root JavaScript adapter is now an `adapter` TypeScript workspace; the repository uses a real root npm workspace and lockfile without a `node_modules` junction.
+- File encoding/chunk logic and process output framing are extracted into focused modules; the former 695/682-line service modules are now 606/578 lines.
+- Authenticated fixed-cardinality metrics cover HTTP, auth, process, queue, checkpoint, and disk signals; Windows service lifecycle failures reach the Application Event Log.
 - SDK calls now fail at typed compile boundaries; the previous global monkey patch is gone.
 - Shutdown now stops accepting HTTP connections before closing OAuth state and worker resources.
 
@@ -48,8 +50,7 @@ The USN index changes the dominant unchanged-workspace cost from hashing all fil
 ## Open release gates
 
 1. Separate gateway and worker identities with an ACL-restricted local transport.
-2. Add Event Log and metrics coverage.
-3. Complete a disposable-VM lifecycle test and measure whether a real ChatGPT connector selects CIMD or DCR.
+2. Complete a disposable-VM lifecycle test and measure whether a real ChatGPT connector selects CIMD or DCR.
 4. Split the two largest modules and progressively strengthen the migrated adapter's public TypeScript interfaces.
 
 ## Rating

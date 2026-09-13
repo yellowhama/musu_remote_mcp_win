@@ -14,6 +14,7 @@ import { createBearerAuth, createHostValidation, createOriginValidation } from "
 import type { AppConfig } from "./config.js";
 import { errorMessage } from "./errors.js";
 import { createMcpServer, type McpServices } from "./mcp-server.js";
+import { metricRoute, MetricsRegistry } from "./metrics.js";
 import { OAUTH_SCOPES, RemoteDevOAuthProvider } from "./oauth.js";
 
 export interface RunningHttpServer {
@@ -54,11 +55,16 @@ export async function startHttpServer(
   services: McpServices,
 ): Promise<RunningHttpServer> {
   const app = express();
+  const metrics = new MetricsRegistry();
   app.disable("x-powered-by");
   if (config.trustProxyHops > 0) {
     app.set("trust proxy", config.trustProxyHops);
   }
   app.use((request, response, next) => {
+    const metricStartedAt = performance.now();
+    response.once("finish", () => {
+      metrics.observeHttp(metricRoute(request.path, config.endpoint), response.statusCode, performance.now() - metricStartedAt);
+    });
     if (request.path !== config.endpoint) {
       next();
       return;
@@ -93,8 +99,8 @@ export async function startHttpServer(
     });
     next();
   });
-  app.use(createHostValidation(config));
-  app.use(createOriginValidation(config));
+  app.use(createHostValidation(config, (reason) => metrics.rejectAuth(reason)));
+  app.use(createOriginValidation(config, (reason) => metrics.rejectAuth(reason)));
 
   let activeMcpRequests = 0;
   const oauthProvider = config.oauthEnabled ? new RemoteDevOAuthProvider(config) : undefined;
@@ -140,7 +146,7 @@ export async function startHttpServer(
       revocationOptions: { rateLimit: { windowMs: 15 * 60 * 1000, max: 50 } },
     }));
   }
-  const authenticate = createBearerAuth(config, oauthProvider);
+  const authenticate = createBearerAuth(config, oauthProvider, (reason) => metrics.rejectAuth(reason));
   const parseMcpJson = express.json({ limit: config.maxRequestBody });
   const modernMcpHandler = createMcpHandler(
     () => createMcpServer(config, services),
@@ -171,6 +177,14 @@ export async function startHttpServer(
       managedProcesses: services.processManager.list().length,
       unrestrictedHostAccess: true,
       oauthEnabled: config.oauthEnabled,
+    });
+  });
+  app.get("/metrics", authenticate, (_request, response) => {
+    void metrics.render(config, services).then((body) => {
+      response.type("text/plain; version=0.0.4; charset=utf-8").send(body);
+    }).catch((error) => {
+      console.error("Metrics collection failed:", errorMessage(error));
+      response.status(500).type("text/plain").send("metrics collection failed\n");
     });
   });
 
@@ -282,6 +296,7 @@ export async function startHttpServer(
     await Promise.allSettled(legacyServers.map((server) => server.close()));
     await services.processManager.shutdown();
     oauthProvider?.close();
+    metrics.close();
     await httpServerClosed;
     await new Promise<void>((resolve) => setImmediate(resolve));
   };

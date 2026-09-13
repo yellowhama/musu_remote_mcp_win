@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import { constants } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { emitTelemetry } from './telemetry.mjs';
 
 const ignored = new Set(['node_modules', 'target', '.next', '.git', '.cache', 'test-results', 'playwright-report']);
 const hashBytes = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -193,14 +194,23 @@ export function createMutationGate(checkpoint, maxPending = 8) {
   return function guarded(tool, operation, signal) {
     if (pending >= maxPending) return Promise.reject(new Error('Mutation queue full; retry after current work completes'));
     pending++;
+    emitTelemetry({ type: 'mutation_queue', pending });
     const run = queue.then(async () => {
       signal?.throwIfAborted();
-      const backup = await checkpoint(tool, signal);
+      const checkpointStartedAt = performance.now();
+      let backup;
+      try {
+        backup = await checkpoint(tool, signal);
+        emitTelemetry({ type: 'checkpoint', outcome: 'success', durationMs: performance.now() - checkpointStartedAt, totalBytes: backup.totalBytes });
+      } catch (error) {
+        emitTelemetry({ type: 'checkpoint', outcome: 'failure', durationMs: performance.now() - checkpointStartedAt });
+        throw error;
+      }
       signal?.throwIfAborted();
       const result = await operation();
       console.log(JSON.stringify({ event: 'workspace_backup', tool, ...backup }));
       return result;
-    }).finally(() => { pending--; });
+    }).finally(() => { pending--; emitTelemetry({ type: 'mutation_queue', pending }); });
     queue = run.catch(() => {});
     return run;
   };

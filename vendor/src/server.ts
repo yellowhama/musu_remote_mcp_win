@@ -2,6 +2,7 @@ import { loadConfig } from "./config.js";
 import { errorMessage } from "./errors.js";
 import { startHttpServer } from "./http-server.js";
 import { createServices } from "./mcp-server.js";
+import { writeWindowsEvent } from "./windows-event-log.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -14,6 +15,7 @@ async function main(): Promise<void> {
   console.log(`cokacremote listening at ${endpointUrl}`);
   console.log(`default cwd: ${config.defaultCwd}`);
   console.log("execution mode: unrestricted host access");
+  writeWindowsEvent(900, "INFORMATION", `Musu Remote MCP started on ${config.host}:${config.port}`);
   console.log(
     config.allowNoAuth && !config.authToken && !config.oauthEnabled
       ? "authentication: disabled"
@@ -33,9 +35,11 @@ async function main(): Promise<void> {
     console.log(`received ${signal}; shutting down`);
     try {
       await running.close();
+      writeWindowsEvent(901, "INFORMATION", `Musu Remote MCP stopped after ${signal}`);
       process.exitCode = 0;
     } catch (error) {
       console.error("shutdown failed:", errorMessage(error));
+      writeWindowsEvent(902, "ERROR", `Musu Remote MCP shutdown failed: ${errorMessage(error)}`);
       process.exitCode = 1;
     }
   };
@@ -46,5 +50,6 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   console.error("cokacremote failed to start:", errorMessage(error));
+  writeWindowsEvent(903, "ERROR", `Musu Remote MCP startup failed: ${errorMessage(error)}`);
   process.exitCode = 1;
 });

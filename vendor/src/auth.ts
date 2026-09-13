@@ -22,6 +22,7 @@ function oauthResourceMetadataUrl(config: AppConfig): string {
 export function createBearerAuth(
   config: AppConfig,
   oauthVerifier?: OAuthTokenVerifier,
+  onReject?: (reason: "bearer") => void,
 ): RequestHandler {
   return async (request, response, next) => {
     if (config.allowNoAuth && !config.authToken && !oauthVerifier) {
@@ -57,6 +58,7 @@ export function createBearerAuth(
       }
     }
 
+    onReject?.("bearer");
     const challenge = config.oauthEnabled
       ? `Bearer realm="cokacremote", error="invalid_token", scope="mcp:tools", resource_metadata="${oauthResourceMetadataUrl(config)}"`
       : 'Bearer realm="cokacremote"';
@@ -68,7 +70,10 @@ export function createBearerAuth(
   };
 }
 
-export function createHostValidation(config: AppConfig): RequestHandler {
+export function createHostValidation(
+  config: AppConfig,
+  onReject?: (reason: "host") => void,
+): RequestHandler {
   return (request, response, next) => {
     if (!config.allowedHosts || config.allowedHosts.length === 0) {
       next();
@@ -82,6 +87,7 @@ export function createHostValidation(config: AppConfig): RequestHandler {
       // The empty value is rejected below.
     }
     if (!config.allowedHosts.includes(hostname)) {
+      onReject?.("host");
       response.status(403).json({
         jsonrpc: "2.0",
         error: { code: -32002, message: "Host header is not allowed" },
@@ -93,7 +99,10 @@ export function createHostValidation(config: AppConfig): RequestHandler {
   };
 }
 
-export function createOriginValidation(config: AppConfig): RequestHandler {
+export function createOriginValidation(
+  config: AppConfig,
+  onReject?: (reason: "origin") => void,
+): RequestHandler {
   return (request, response, next) => {
     const supplied = request.header("origin");
     if (supplied === undefined) {
@@ -110,6 +119,7 @@ export function createOriginValidation(config: AppConfig): RequestHandler {
       // Invalid and opaque origins receive the same response.
     }
     if (!origin || !config.allowedOrigins?.includes(origin)) {
+      onReject?.("origin");
       response.status(403).json({
         jsonrpc: "2.0",
         error: { code: -32003, message: "Origin is not allowed" },
