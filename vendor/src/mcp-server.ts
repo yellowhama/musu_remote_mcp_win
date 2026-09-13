@@ -18,6 +18,7 @@ export function createServices(config: AppConfig): McpServices {
       processRetentionMs: config.processRetentionMs,
       maxProcesses: config.maxProcesses,
       defaultMaxOutputBytes: config.maxOutputBytes,
+      windowsJobRunner: config.windowsJobRunner,
     }),
     fileService: new FileService({
       defaultCwd: config.defaultCwd,

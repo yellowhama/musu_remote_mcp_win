@@ -12,6 +12,7 @@ This repository is the Windows edition of [remote_dev_mcp](https://github.com/ye
 - Target checkpoints for direct edits and full checkpoints before shell/script/patch jobs
 - Content-addressed backups, bounded queues, idempotency keys, restart recovery
 - Windows path, drive-letter, junction/symlink, hard-link, and process-tree handling
+- Kill-on-close Windows Job Object containment for every command tree
 - Verified foreground operation and beta Windows service operation through pinned WinSW
 - Cloudflare named tunnel guidance for a fixed HTTPS endpoint
 

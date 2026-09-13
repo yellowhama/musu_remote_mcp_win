@@ -47,10 +47,9 @@ The USN index changes the dominant unchanged-workspace cost from hashing all fil
 ## Open release gates
 
 1. Separate gateway and worker identities with an ACL-restricted local transport.
-2. Replace `taskkill /T /F` cancellation with Windows Job Objects.
-3. Add Event Log and metrics coverage.
-4. Complete a disposable-VM lifecycle test and a real ChatGPT connector OAuth round trip.
-5. Split the two largest modules and progressively strengthen the migrated adapter's public TypeScript interfaces.
+2. Add Event Log and metrics coverage.
+3. Complete a disposable-VM lifecycle test and a real ChatGPT connector OAuth round trip.
+4. Split the two largest modules and progressively strengthen the migrated adapter's public TypeScript interfaces.
 
 ## Rating
 

@@ -26,6 +26,7 @@ export interface AppConfig {
   maxRetainedProcessOutputBytes: number;
   processRetentionMs: number;
   maxProcesses: number;
+  windowsJobRunner: string | undefined;
   maxFileChunkBytes: number;
   maxEditFileBytes: number;
 }
@@ -238,6 +239,9 @@ export function loadConfig(
       "MCP_MAX_PROCESSES",
       1,
     ),
+    windowsJobRunner: env.MCP_WINDOWS_JOB_RUNNER?.trim()
+      ? path.resolve(env.MCP_WINDOWS_JOB_RUNNER.trim())
+      : undefined,
     maxFileChunkBytes: parseInteger(
       env.MCP_MAX_FILE_CHUNK_BYTES,
       1024 * 1024,

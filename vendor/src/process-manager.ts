@@ -176,6 +176,7 @@ export interface ProcessManagerOptions {
   processRetentionMs: number;
   maxProcesses: number;
   defaultMaxOutputBytes: number;
+  windowsJobRunner?: string | undefined;
 }
 
 export class ProcessManager {
@@ -190,7 +191,13 @@ export class ProcessManager {
     this.prune();
     this.#makeCapacity();
 
-    const child = spawn(request.executable, request.args, {
+    const executable = process.platform === "win32" && this.#options.windowsJobRunner
+      ? this.#options.windowsJobRunner
+      : request.executable;
+    const args = process.platform === "win32" && this.#options.windowsJobRunner
+      ? [request.executable, ...request.args]
+      : request.args;
+    const child = spawn(executable, args, {
       cwd: request.cwd,
       env: { ...process.env, ...request.env },
       stdio: "pipe",
@@ -659,19 +666,8 @@ export class ProcessManager {
       return;
     }
     try {
-      if (process.platform !== "win32") {
-        process.kill(-pid, signal);
-      } else {
-        // Node's Windows signal emulation only terminates the direct child.
-        // taskkill /T closes the complete command tree created for this session.
-        const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
-          windowsHide: true,
-          stdio: "ignore",
-        });
-        killer.on("error", (error) => {
-          managed.error ??= `Failed to terminate Windows process tree: ${errorMessage(error)}`;
-        });
-      }
+      if (process.platform !== "win32") process.kill(-pid, signal);
+      else managed.child.kill(signal);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "ESRCH") {

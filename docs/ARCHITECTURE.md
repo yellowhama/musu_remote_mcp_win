@@ -26,7 +26,7 @@ OAuth clients and token hashes live in a SQLite database configured for WAL, ful
 
 PowerShell 7 is the default shell. Windows shell argument construction uses `-NoLogo -NoProfile -NonInteractive -Command`; `cmd.exe` uses `/d /s /c`. PowerShell scripts use `pwsh.exe -File`. Python defaults to `python.exe` on Windows.
 
-Node's Windows signal emulation does not manage descendants. Process cancellation therefore launches `taskkill.exe /PID <pid> /T /F`. Session ownership remains bound to the authenticated OAuth client.
+Node's Windows signal emulation does not manage descendants. Every Windows command therefore runs through `MusuJobRunner.exe`, which assigns itself to a nested Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` before creating the command. Descendants inherit the job, and terminating the runner closes the last handle and ends the tree. Session ownership remains bound to the authenticated OAuth client.
 
 ## Trust model
 

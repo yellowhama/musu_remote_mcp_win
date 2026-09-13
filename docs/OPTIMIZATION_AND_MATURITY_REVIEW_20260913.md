@@ -49,8 +49,7 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 ### P0 — stable-service gate
 
 1. **Split identities and processes.** Put OAuth/public HTTP under a low-privilege gateway identity with no workspace access. Put execution under a dedicated worker identity and use an ACL-restricted named pipe with a small authenticated schema.
-2. **Replace `taskkill` with Windows Job Objects.** Assign every process tree at creation, set kill-on-job-close, and record assignment failures. This removes PID-reuse and detached-child ambiguity.
-3. **Run lifecycle acceptance on a disposable VM.** Record install, health, ChatGPT OAuth, restart, reboot, forced failure recovery, upgrade rollback, retention apply, and uninstall.
+2. **Run lifecycle acceptance on a disposable VM.** Record install, health, ChatGPT OAuth, restart, reboot, forced failure recovery, upgrade rollback, retention apply, and uninstall.
 
 ### P1 — maintainability and observability
 

@@ -2,6 +2,7 @@
 /backups/
 /node_modules/
 /adapter/dist/
+/windows/bin/
 **/node_modules/
 *.backup
 **/*.backup
