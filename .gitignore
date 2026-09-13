@@ -1,0 +1,11 @@
+/state/
+/backups/
+/node_modules/
+**/node_modules/
+*.backup
+**/*.backup
+*.log
+*.tmp
+.env
+.env.*
+!.env.example

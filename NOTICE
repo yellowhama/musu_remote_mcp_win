@@ -1,0 +1,10 @@
+Remote Dev MCP
+Copyright (c) 2026 yellowhama
+
+This distribution contains and modifies software from cokacremote:
+https://github.com/kstost/cokacremote
+
+cokacremote is licensed under the MIT License.
+Its original license is preserved in LICENSE and vendor/LICENSE.
+The vendored source baseline used for this release is commit:
+d7ceca39a0308d4a91238d35e5599ece30e69a19

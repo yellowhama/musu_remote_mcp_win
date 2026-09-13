@@ -1,0 +1,12 @@
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { selectTunnelUrl, updateRuntime } from './tunnel-runtime.mjs';
+const tunnelContainer = process.env.MCP_TUNNEL_CONTAINER || 'remote-dev-mcp-tunnel';
+const inspected = spawnSync('docker', ['inspect', '--format', '{{json .State}}', tunnelContainer], { encoding: 'utf8', timeout: 10000 });
+if (inspected.status !== 0) throw new Error('Cannot inspect tunnel state');
+const state = JSON.parse(inspected.stdout);
+const result = spawnSync('docker', ['logs', '--since', state.StartedAt, tunnelContainer], { encoding: 'utf8', timeout: 10000, maxBuffer: 1024 * 1024 });
+if (result.status !== 0) throw new Error(result.stderr || 'Tunnel container is not running');
+const publicUrl = selectTunnelUrl(state, `${result.stdout}\n${result.stderr}`);
+const changed = await updateRuntime(fileURLToPath(new URL('./state/runtime.json', import.meta.url)), publicUrl);
+console.log(process.argv.includes('--json') ? JSON.stringify({ publicUrl, changed }) : `MCP URL: ${publicUrl}/mcp`);
