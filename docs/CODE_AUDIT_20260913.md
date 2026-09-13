@@ -1,86 +1,57 @@
-# Windows native code audit
-
-Date: 2026-09-13
-Target: `yellowhama/musu_remote_mcp_win`
+# Code audit — 2026-09-13
 
 ## Verdict
 
-The foreground Windows runtime is ready for controlled use by one trusted operator. The installer, TypeScript build, OAuth server startup, path validation, checkpoints, durable jobs, UTF-8 handling, and Windows process-tree cancellation have been exercised on Windows 11 without Docker.
+No critical correctness defect was found in the current foreground runtime. The audited build is appropriate for one trusted operator under supervision. It is not ready for untrusted callers because the HTTP gateway and arbitrary-command worker still share a Windows identity.
 
-Windows service mode is beta until an administrator-level clean-machine test covers install, reboot start, failure restart, upgrade, and uninstall. The Cloudflare named-tunnel configuration is based on official native service documentation but has not been connected to a live hostname in this repository verification.
-
-Qualitative score: **8.5/10 for a trusted personal development PC; not suitable for hostile or multi-tenant execution.**
-
-## Resolved findings
+## Findings closed in this audit
 
 | Severity | Finding | Resolution | Evidence |
-|---|---|---|---|
-| High | Docker-only `/state`, `/workspace`, and flattened build paths prevented native startup | Strict Windows JSON configuration and native entrypoint | Real health 200 / MCP 401 smoke |
-| High | POSIX shell flags were sent to Windows shells | PowerShell/cmd-specific argument construction | Full MCP tool integration suite |
-| High | `child.kill()` could leave Windows grandchildren alive | `taskkill.exe /T /F` plus descendant test | Windows-only process-tree test |
-| High | Windows lacks `O_NOFOLLOW`, allowing a backup object link to be followed | Explicit `lstat` link rejection and open-handle identity comparison | Regression test passes |
-| High | Concurrent identical checkpoint objects collided because Windows rename does not replace an existing target | Verify the winning content-addressed object and remove the losing temporary file | 10,001-file duplicate-content test passes |
-| Medium | String-prefix path checks did not model drive-letter case, Windows separators, or 8.3 aliases | Real-path canonicalization followed by `path.relative` containment | Windows adapter tests and `windows-latest` CI |
-| Medium | Junctions and direct hard-linked files could bypass an edit-path assumption | Junction/symlink traversal and final-file hard-link rejection | Source audit and path regressions |
-| Medium | Git could rewrite LF patches to CRLF under host `core.autocrlf` | Per-command `core.autocrlf=false` for patch application | Unified and three-way patch integration tests |
-| Medium | POSIX mode tests produced false failures on NTFS | Windows ACL contract documented; POSIX-only assertions gated | 41 applicable upstream tests pass |
-| Medium | State key relied on ineffective Windows `chmod` semantics | Installer restricts state DACL with `icacls` | Installer execution and ACL inspection |
-| Medium | Terminal job state became visible in memory before its atomic state-file write completed | Build and save the next record before publishing it in memory; remove timing delay from regression | Repeated job tests and full adapter suite pass |
+| --- | --- | --- | --- |
+| High | Present Origin headers were not validated | canonical public/loopback allow-list with 403 rejection | hostile and valid Origin integration tests |
+| High | Legacy-only MCP transport and global prototype interception | SDK v2 2026-07-28 primary handler, explicit registry, 2025-11-25 compatibility handler | modern and raw legacy initialization tests |
+| High | OAuth traffic and state growth were unbounded | endpoint rate limits, client/state caps, input limits | security boundary integration tests |
+| High | Service install could leave partial state | transactional rollback and health gate | installer fault-path tests |
+| High | Backup/job/log growth was unbounded | retention, mark/reachability GC, dry-run, staging, disk watermark | retention and low-space tests |
+| Medium | Full hashing dominated large checkpoints | NTFS USN delta index with conservative fallback | 10,001-file benchmark and journal tests |
+| Medium | Whole-file OAuth JSON rewrites | SQLite WAL, strict schema, transactions, expiry indexes, legacy migration | OAuth store/integration tests |
+| Medium | OAuth module mixed presentation/provider/storage | storage extracted to `oauth-store.ts` | typecheck and suite |
 
-## Remaining risks
+## Current security boundary
 
-### Shared execution identity — high by design
+The server binds to loopback and expects a controlled HTTPS tunnel. Host and Origin are validated. OAuth uses PKCE, resource/audience binding, refresh rotation, grant revocation on replay, bounded registration, and hashed token identifiers. State and key ACLs remain part of the trust boundary.
 
-OAuth, shell execution, state, and backups share one Windows account. A successfully authenticated shell job can read anything this account can read. Editable roots prevent accidental direct-tool traversal; they do not sandbox shell commands.
+The unrestricted command tools can read anything available to the service identity. A compromised authenticated session can therefore reach OAuth state, backups, and unrelated files granted to that identity. The required architectural fix is a low-privilege gateway plus an execution worker under a separate identity.
 
-Next control: split the OAuth gateway and execution worker into separate identities and communicate through a narrow authenticated local channel.
+## Code health
 
-### LocalService is shared — medium
+- `oauth.ts` fell from roughly 700 lines to 392 lines after storage extraction.
+- `file-service.ts` (695) and `process-manager.ts` (682) remain the main change-risk concentrations.
+- The root adapter is still compressed JavaScript and the root `node_modules` directory is a junction to `vendor/node_modules`.
+- SDK calls now fail at typed compile boundaries; the previous global monkey patch is gone.
+- Shutdown now stops accepting HTTP connections before closing OAuth state and worker resources.
 
-The default service account is lower privilege than LocalSystem, but other services may also run as LocalService. Granting it modify access to source makes that source reachable to those services.
+## Performance assessment
 
-Next control: add a dedicated local-account or virtual-service-account installer option with an automated ACL migration and removal test.
+The USN index changes the dominant unchanged-workspace cost from hashing all files to enumerating/statting them. On 10,001 NTFS files, snapshot time fell from 10.94 s to 3.58 s unchanged and 3.64 s with one changed file. Hash operations fell from 10,001 to 0 and 1 respectively. The final verification path remains intentionally conservative.
 
-### Process containment — medium
+## Verification
 
-`taskkill /T /F` terminates the normal visible process tree, but it is not equivalent to assigning descendants to a kill-on-close Windows Job Object. A process that escapes into another service boundary may survive.
+- `npm run typecheck`: pass.
+- `npm run build`: pass.
+- `npm test`: **43 pass, 1 skipped**.
+- OAuth-focused tests: **5/5 pass**.
+- Git diff whitespace check: pass; Git reports only expected CRLF-to-LF normalization warnings.
+- GitHub Actions: green for Origin, installer, retention, SDK v2, USN, and SQLite commits (run 34762770787).
 
-Next control: a small signed native launcher using Job Objects.
+## Open release gates
 
-### Filesystem metadata recovery — medium
+1. Separate gateway and worker identities with an ACL-restricted local transport.
+2. Replace `taskkill /T /F` cancellation with Windows Job Objects.
+3. Add Event Log and metrics coverage.
+4. Complete a disposable-VM lifecycle test and a real ChatGPT connector OAuth round trip.
+5. Convert the root adapter to TypeScript, remove the dependency junction, and split the two largest modules.
 
-Backups preserve and verify file bytes. They do not fully preserve NTFS DACLs, owners, alternate data streams, every attribute, junctions, or symlinks. Database and external command effects are not transactional.
+## Rating
 
-Next control: versioned optional NTFS metadata capture and a documented database-aware pre-job hook.
-
-### Service and tunnel lifecycle — medium, verification gap
-
-The WinSW download is version- and SHA-256-pinned, XML contains no secret, and scripts parse. Administrator service registration and live named-tunnel OAuth have not been performed during this audit.
-
-Next gate: a disposable Windows VM test with recorded service status, reboot, failure restart, fixed URL OAuth refresh, update, and uninstall evidence.
-
-## Verification record
-
-- Windows 11 Home 64-bit, Node.js 24.8.0, npm 11.12.0, PowerShell 7.5.3
-- TypeScript build: pass
-- npm production dependency audit: 0 known vulnerabilities
-- Upstream Vitest: 41 pass, 1 POSIX-only permission test skipped on Windows
-- Windows process-tree regression: included in the upstream total and passed
-- Adapter/checkpoint/job/native tests: 57 pass
-- Native real-server smoke: health 200, unauthenticated MCP 401, approval-key creation
-- Installer without `-Service`: pass against disposable roots
-- Generated state DACL: current user and SYSTEM only in foreground installation
-- PowerShell parser: install/start/uninstall scripts pass
-- `git diff --check`: pass
-- Secret-pattern review: no generated key, OAuth token, tunnel credential, or private key tracked
-- GitHub `windows-latest` CI: pass ([run 34758123035](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34758123035))
-- GitHub private vulnerability reporting: enabled
-
-## Release gates
-
-Completed release checks: clean-checkout `windows-latest` CI, generated-file review, and private vulnerability reporting.
-
-Remaining release gates:
-
-1. Run a clean Windows VM service lifecycle test before labeling service mode stable.
-2. Run a live named-tunnel OAuth round trip before publishing a production setup claim.
+**8.3/10, B+ controlled-use beta.** Core correctness and recovery are strong. Privilege isolation, observability, and lifecycle evidence are the remaining production blockers.

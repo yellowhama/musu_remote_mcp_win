@@ -1,97 +1,89 @@
-# Optimization and maturity review
+# Optimization and maturity review — 2026-09-13
 
-Date: 2026-09-13  
-Target: `yellowhama/musu_remote_mcp_win` at `6f9516a`
+## Decision
 
-## Executive verdict
+Musu Remote MCP for Windows is a strong **single-operator beta**. It is suitable for supervised development on a trusted personal workstation. It should not be presented as a hostile-code sandbox, multi-tenant service, or unattended enterprise execution plane.
 
-The server is a strong controlled-use beta for one trusted developer. Its Windows path handling, byte-exact checkpointing, OAuth token audience checks, durable jobs, bounded queues, UTF-8 handling, and Windows CI are materially better than a typical experimental MCP wrapper.
+The implementation moved materially during this audit: request Origin validation, bounded OAuth traffic and metadata, MCP SDK v2 dual-era serving, transactional service installation, retention/GC/disk watermarks, an NTFS USN hash index, and SQLite WAL OAuth state are now implemented and tested.
 
-It is not yet a production-grade Windows service or a current-generation MCP implementation. The highest-value work is protocol compliance and abuse resistance first, checkpoint latency and retention second, and architecture simplification third.
+## Qualitative scorecard
 
-| Dimension | Score | Assessment |
-|---|---:|---|
-| Correctness and recovery | 8.3/10 | Strong failure-closed mutation path and useful regression suite; restore is a library primitive rather than an operator workflow |
-| Security for one trusted operator | 7.4/10 | Loopback binding, OAuth, audience binding, Host checks, and ACLs are good; Origin validation, rate limits, and identity separation remain |
-| Performance and scalability | 5.2/10 | Full pre-command scans and hashing dominate latency on large workspaces; retention is unbounded |
-| Architecture and maintainability | 6.2/10 | Small adapter surface, but global prototype interception, duplicated checkpoint implementations, a dependency junction, and large vendor modules raise change risk |
-| Windows operations | 6.5/10 | Foreground install is verified; service ACL failures are not consistently checked and the service/tunnel lifecycle lacks VM evidence |
-| Test and release discipline | 8.2/10 | Clean Windows CI, 98 applicable tests, smoke tests, exact lockfile, and zero known production dependency vulnerabilities |
-| Protocol longevity | 5.0/10 | Uses SDK v1.30 and the legacy 2025 request model while MCP 2026-07-28 and SDK v2 are current |
+| Dimension | Score | Evidence and limit |
+| --- | ---: | --- |
+| Functional completeness | **9.2/10** | 23 tools, jobs, checkpoints, OAuth, modern and legacy MCP, native service scripts; live ChatGPT connector acceptance is still manual |
+| Security for one trusted operator | **8.8/10** | loopback bind, Host/Origin checks, OAuth audience binding, PKCE, hashed tokens, bounded DCR and rate limits; gateway and command worker still share one identity |
+| Recovery and operations | **8.9/10** | byte-exact objects, manifests, durable jobs, transactional install rollback, dry-run reachable GC, retention, 10 GiB default watermark; clean-VM reboot/upgrade evidence remains |
+| Performance and scalability | **7.8/10** | persistent hash index and NTFS USN deltas reduce unchanged snapshot time by about 67%; safe verification still enumerates and stats the workspace |
+| Architecture and maintainability | **7.4/10** | typed SDK v2 boundary, explicit tool registry, OAuth store split; root adapter remains compressed JavaScript, dependency junction remains, two modules exceed 680 lines |
+| Protocol longevity | **8.9/10** | MCP 2026-07-28 is primary and 2025-11-25 remains for compatibility; CIMD migration and real ChatGPT negotiation evidence remain |
+| Observability | **6.0/10** | health and service logs exist; Windows Event Log events, counters, latency histograms, and operator alerts do not |
 
-Overall maturity: **7.0/10 controlled-use beta**. Foreground use by one trusted developer is acceptable. Persistent internet-facing service use should wait for the P0 items below.
+Weighted overall maturity: **8.3/10 (B+, approaching A-)**. The ceiling is set by privilege separation and lifecycle evidence rather than core tool behavior.
 
-## Findings ordered by leverage
+## Performance evidence
 
-### P0 — required before a stable service label
+An actual NTFS `F:` drive fixture with 10,001 files produced:
 
-1. **Add explicit Origin validation.** `entrypoint.mjs` derives an allow-list for Host validation, but `vendor/src/http-server.ts` has no Origin middleware. The current Streamable HTTP specification requires servers to validate every present Origin header and return 403 for an invalid value. Validate the canonical public origin and deliberate loopback origins before OAuth or MCP routing. Test absent, valid, malformed, `null`, and hostile origins.
+| Scenario | Snapshot only | Including final verify | Files hashed |
+| --- | ---: | ---: | ---: |
+| baseline | 10.94 s | 16.65 s | 10,001 |
+| unchanged incremental | 3.58 s | 8.36 s | 0 |
+| one changed file | 3.64 s | 9.91 s | 1 |
 
-2. **Migrate to MCP 2026-07-28 and TypeScript SDK v2 with legacy negotiation.** The repository pins `@modelcontextprotocol/sdk` 1.30.0. The current protocol removes the initialization/session model, requires per-request metadata plus `MCP-Protocol-Version`, `Mcp-Method`, and conditional `Mcp-Name` headers, and deprecates DCR in favor of Client ID Metadata Documents. Use the official staged v1-to-v2 migration and retain the legacy handler until ChatGPT interoperability is verified.
+The optimization is safe by construction: it falls back to a full scan on non-NTFS volumes, journal reset/wrap/lost coverage, directory/link changes, or unstable start/end USN boundaries. Final verification intentionally stats all source paths. The next speed gain therefore comes from a native directory identity/index layer, not from skipping safety checks.
 
-3. **Bound OAuth registration and approval traffic.** Dynamic registration can grow the in-memory and JSON-file client map without a repository-defined cap. The approval-key endpoint has no local attempt budget. Add per-IP and per-client token buckets at the application boundary, a global state-record limit, request timeouts, maximum metadata lengths/counts, and Cloudflare rate-limit guidance. Reject supplied server-managed client identifiers explicitly in the store boundary.
+## Completed hardening
 
-4. **Make Windows service installation fail closed and transactional.** `windows/Install.ps1` checks the first state ACL command but does not check the exit status of the four LocalService ACL grants. It also does not verify service stop, start health, effective ACLs, or roll back a partial install. Wrap every external command, stage configuration, verify `/health`, and restore the prior service/configuration on failure.
+- Validates every present Origin against the public and deliberate loopback origins before OAuth/MCP routing.
+- Serves MCP 2026-07-28 through SDK v2 and retains a tested 2025-11-25 legacy path.
+- Uses an explicit typed tool registry; no `McpServer.prototype` interception remains.
+- Caps OAuth clients, pending authorization state, body size, metadata fields, redirect URIs, and endpoint request rates.
+- Stores OAuth clients and SHA-256 token identifiers in a constrained SQLite database using WAL and full synchronization; refresh replay revokes the grant transactionally.
+- Migrates the prior JSON state with a recovery copy and refuses malformed legacy state.
+- Installs the service with rollback and health verification.
+- Implements manifest/job/log retention, reachable-object GC, dry-run plans, staged deletion, and pre-mutation free-space watermarks.
+- Reuses checkpoint hashes through a persistent NTFS USN cursor and content index while preserving full-scan fallbacks.
 
-5. **Add backup, job, and log retention with disk watermarks.** Content objects, manifests, WinSW logs, and job records accumulate. `maxRecords=2000` eventually blocks new jobs, while backup objects have no mark-and-sweep lifecycle. Add operator-selected retention, manifest reachability GC, archival, dry-run output, minimum-free-space gates, and corruption-safe two-phase deletion. Never delete an object reachable from a retained manifest.
+## Remaining work, in order
 
-### P1 — largest speed and reliability gains
+### P0 — stable-service gate
 
-1. **Replace full scans with a persistent checkpoint index plus NTFS USN journal deltas.** Build one verified baseline mapping `(volume/file identity, path, size, timestamps, hash)` to content objects. Store the USN journal ID and cursor. Before a job, apply changed records and produce a delta manifest referencing unchanged objects. Fall back to a full scan when the journal ID changes, the cursor wraps, the volume is unsupported, or any invariant is unclear. Read journal changes again after hashing until a stable boundary is reached. Microsoft documents the USN journal as more efficient than repeated timestamp checks.
+1. **Split identities and processes.** Put OAuth/public HTTP under a low-privilege gateway identity with no workspace access. Put execution under a dedicated worker identity and use an ACL-restricted named pipe with a small authenticated schema.
+2. **Replace `taskkill` with Windows Job Objects.** Assign every process tree at creation, set kill-on-job-close, and record assignment failures. This removes PID-reuse and detached-child ambiguity.
+3. **Run lifecycle acceptance on a disposable VM.** Record install, health, ChatGPT OAuth, restart, reboot, forced failure recovery, upgrade rollback, retention apply, and uninstall.
 
-2. **Offer explicit execution safety profiles.** Keep the full-checkpoint profile as the default. Add a declared-write-set job that snapshots specific targets, and a read-only profile executed under an OS identity without workspace write permission. Arbitrary shell text cannot be safely classified as read-only by string inspection.
+### P1 — maintainability and observability
 
-3. **Use Windows Job Objects for process containment.** `taskkill /T /F` is a practical fallback but cannot provide the resource accounting and kill-on-close lifecycle of a Job Object. A small native launcher should assign the process before user code starts, set `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, and optionally enforce memory, CPU, process-count, and wall-time limits.
+1. Convert the root `.mjs` adapter/checkpoint layer to TypeScript with explicit interfaces and emitted artifacts.
+2. Make the repository root the npm workspace and remove the `node_modules` junction.
+3. Split `file-service.ts` (695 lines) and `process-manager.ts` (682 lines) by storage, validation, execution, and lifecycle responsibility.
+4. Emit structured Windows Event Log records and metrics for auth rejection, tool latency/error, queue depth, checkpoint bytes/duration/strategy, disk watermark, process cancellation, and retention.
+5. Add Cloudflare WAF examples for `/authorize`, `/register`, `/token`, and `/revoke`; keep server-side limits authoritative.
+6. Add Client ID Metadata Document support, retain DCR during a measured compatibility window, then remove it only after ChatGPT evidence.
 
-4. **Separate the OAuth gateway from the execution worker.** Run the public-facing loopback gateway with no workspace access. Put command execution under a dedicated local or virtual service account and communicate over an ACL-restricted named pipe using a small authenticated request schema. This prevents a command from reading OAuth state merely because gateway and worker currently share an identity.
+### P2 — product finish
 
-5. **Add performance budgets and reproducible benchmarks.** Record cold baseline, unchanged checkpoint, one-file delta, 10k/100k-file tree, 1/10 GiB tree, cancellation, and restore timings on SSD and HDD. Gate regressions for p50/p95 latency, bytes read, peak RSS, and temporary disk amplification. The existing 10,001 tiny-file checkpoint test took 11.7–19.5 seconds in local runs, demonstrating that metadata cost is already material.
+- Replace remaining upstream `cokacremote` names and version `0.1.0` with a stable Musu product/version contract.
+- Add an operator-facing restore command that invokes the implemented restore-to-new-directory primitive.
+- Benchmark 100k and 1M path workspaces and publish p50/p95 checkpoint and tool latency.
 
-### P2 — maintainability and product quality
+## Known limits
 
-1. Replace `McpServer.prototype.registerTool` monkey-patching with an explicit tool registry/decorator owned by the guard layer. SDK upgrades should fail at typed compile boundaries rather than at global runtime behavior.
-2. Move adapter modules from compressed JavaScript to formatted TypeScript and enforce lint, format, typecheck, dependency review, and protocol conformance in CI.
-3. Create a real root package/workspace and remove the root `node_modules` junction. Package the runtime so installation does not depend on the vendored dependency tree's physical layout.
-4. Split `oauth.ts`, `file-service.ts`, and `process-manager.ts` into state storage, validation, protocol, rendering, process I/O, and lifecycle modules. Each is currently roughly 680 lines.
-5. Replace whole-file OAuth JSON rewrites with a bounded transactional store. SQLite with WAL, schema constraints, expiry indexes, and migrations is a reasonable local default.
-6. Add structured event schemas, log rotation verification, Windows Event Log integration, readiness distinct from liveness, disk/queue/checkpoint metrics, and redaction tests.
-7. Complete product naming and semantic versioning. User-facing metadata, OAuth pages, health output, package identity, and logs still expose the upstream `cokacremote` name and version `0.1.0`.
+- `node:sqlite` is synchronous and may emit an experimental warning on Node 24.8. The bounded single-operator workload keeps blocking short, but a multi-user design should move state behind an asynchronous storage process.
+- OAuth client metadata may contain secrets and the database is not encrypted; NTFS ACLs and the separate-identity design remain required.
+- USN acceleration applies only to eligible NTFS roots and never replaces final mutation verification.
+- The full-access command tool inherits the service account's rights. Editable roots are recovery and direct-tool boundaries, not a shell sandbox.
 
-## Code hygiene decision required
+## Verification evidence
 
-The following production-orphan candidates are covered by tests but are not wired into the Windows runtime:
+- TypeScript typecheck and build: pass.
+- Vendor suite: **43 pass, 1 POSIX-only skip** on Windows.
+- Checkpoint/adapter suite before SQLite change: **65/65 pass**, plus **42 pass and 1 POSIX-only skip** in the vendor suite at that checkpoint.
+- GitHub Actions is green through the SQLite commit (run 34762770787).
 
-- `createCheckpoint` and `inspectCheckpoint` in `checkpoint.mjs`; production imports only `createMutationGate` from that module.
-- `restoreToNewDirectory` in `snapshot-targets.mjs`; operations documentation describes it, but no CLI or MCP operator tool invokes it.
-- `tunnel-runtime.mjs`; it manages TryCloudflare URLs while the supported Windows path requires a named tunnel.
-
-Choose one outcome for each: wire it into an explicit operator command with acceptance tests, or remove it and its dedicated tests. Keeping tested but unreachable recovery code creates false confidence.
-
-## Recommended delivery sequence
-
-| Slice | Deliverable | Exit evidence |
-|---|---|---|
-| 1 | Origin middleware, auth/DCR limits, installer external-command checks | hostile-origin 403 tests, abuse-limit tests, injected ACL failure rollback test |
-| 2 | SDK v2 dual-era migration | official conformance suite plus live ChatGPT legacy and modern connection evidence |
-| 3 | retention and disk guard | dry-run/execute GC tests, retained-manifest proof, low-space refusal test |
-| 4 | checkpoint index and USN fast path | unchanged and one-file-delta benchmarks, journal-wrap full-scan fallback, crash recovery |
-| 5 | dedicated worker identity and Job Object launcher | token/state denial from worker, process escape tests, kill-on-service-stop proof |
-| 6 | service lifecycle and observability | clean VM install, reboot, restart, upgrade, uninstall, named-tunnel OAuth, operational dashboard |
-
-## Evidence and limits
-
-- Windows CI run 34758219782 passes from a clean checkout.
-- Local TypeScript build passes; upstream tests report 41 pass and one POSIX-only skip; adapter/native tests report 57 pass.
-- Production dependency audit reports zero known vulnerabilities across 94 production dependencies.
-- The review exposed and fixed a durable-state race: terminal job state is now published in memory only after the atomic state-file write completes. The regression no longer uses a timing delay.
-- Read-only recursive enumeration of the active F workspace did not complete within the audit sampling window. This is observational evidence of a large tree, not a controlled checkpoint benchmark.
-- Administrator service registration, reboot behavior, failure restart, live named-tunnel OAuth, and clean-machine uninstall remain unverified.
-
-Primary references:
+## Primary references
 
 - [MCP 2026-07-28 Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
-- [MCP 2026-07-28 authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
-- [MCP TypeScript SDK roadmap](https://github.com/modelcontextprotocol/typescript-sdk/blob/main/ROADMAP.md)
 - [MCP TypeScript SDK v2 migration](https://ts.sdk.modelcontextprotocol.io/v2/migration/upgrade-to-v2)
+- [Node.js SQLite API](https://nodejs.org/api/sqlite.html)
 - [Microsoft USN journal](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/fsutil-usn)
-- [Microsoft Windows Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)
