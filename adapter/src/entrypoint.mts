@@ -11,4 +11,5 @@ process.env.MCP_ALLOWED_ORIGINS = new URL(settings.publicUrl).origin;
 process.env.MCP_OAUTH_APPROVAL_KEY = (await fs.readFile(path.join(stateRoot, 'approval-key.txt'), 'utf8')).trim();
 delete process.env.MCP_AUTH_TOKEN;
 await import('./guard.mjs');
-await import('../../vendor/dist/src/server.js');
+const upstreamServerUrl = new URL('../../vendor/dist/src/server.js', import.meta.url);
+await import(upstreamServerUrl.href);

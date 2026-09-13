@@ -8,7 +8,7 @@ This repository is the Windows edition of [remote_dev_mcp](https://github.com/ye
 
 - Native Windows 11 execution with Node.js 22.13+
 - PowerShell 7 command and script execution with UTF-8 output preservation
-- 23 MCP tools, OAuth DCR/PKCE/refresh/revocation, client-owned jobs
+- 23 MCP tools, OAuth CIMD+DCR/PKCE/refresh/revocation, client-owned jobs
 - Target checkpoints for direct edits and full checkpoints before shell/script/patch jobs
 - Content-addressed backups, bounded queues, idempotency keys, restart recovery
 - Windows path, drive-letter, junction/symlink, hard-link, and process-tree handling
@@ -98,6 +98,8 @@ Quick Tunnels are intended only for testing. Their hostname changes when restart
 2. Confirm the named tunnel routes `https://your-host.example/health`.
 3. In ChatGPT developer mode, create a custom MCP app at `https://your-host.example/mcp` and choose OAuth.
 4. Enter the approval key only on this server's OAuth approval page.
+
+The authorization-server metadata advertises Client ID Metadata Document (CIMD) support while retaining Dynamic Client Registration (DCR) for existing ChatGPT clients. CIMD documents must use a canonical HTTPS URL and a public network destination; the server pins the resolved address, rejects redirects, and bounds retrieval time and size.
 5. Scan tools and confirm that 23 tools are present.
 6. Start with a read-only request for the repository instruction file.
 

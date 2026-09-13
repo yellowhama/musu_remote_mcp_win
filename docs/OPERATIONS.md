@@ -57,6 +57,6 @@ The `retention.minFreeBytes` setting is a pre-mutation disk watermark. A checkpo
 
 Keep application rate limits enabled even when Cloudflare is present. At the edge, apply stricter per-source limits to `/authorize` and `/register`, moderate limits to `/token` and `/revoke`, reject oversized bodies, and alert on sustained 401/403/429 responses. Exempt only a documented trusted source after measuring the normal ChatGPT flow; do not make the WAF the sole control.
 
-The server currently supports DCR for existing clients. Client ID Metadata Documents are the target registration model for MCP 2026-07-28. Add CIMD alongside DCR, capture real ChatGPT negotiation evidence, and keep DCR until the compatibility window has measured zero required clients.
+The server advertises and supports CIMD while retaining DCR for existing clients. Capture whether each real ChatGPT connection presents an HTTPS CIMD client identifier or calls `/register`; keep DCR until a measured compatibility window records zero DCR-dependent clients. A CIMD lookup that resolves to any private or special-purpose address, redirects, exceeds 64 KiB, exceeds five seconds, or returns invalid public-client metadata fails closed.
 
 OAuth state is SQLite WAL. Stop the server before offline copying, and preserve the database plus any `-wal` and `-shm` files and NTFS ACLs as one unit. Node.js 22.13 or newer is required.

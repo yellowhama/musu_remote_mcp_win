@@ -22,6 +22,8 @@ On eligible NTFS roots, a persistent hash index records the volume journal ID an
 
 OAuth clients and token hashes live in a SQLite database configured for WAL, full synchronization, schema constraints, and expiry indexes. Refresh rotation and replay revocation are transactional. A legacy JSON state file is migrated with a timestamped recovery copy.
 
+Client discovery supports both MCP 2026-07-28 Client ID Metadata Documents and legacy Dynamic Client Registration. DCR records remain in SQLite. CIMD resolution accepts only canonical HTTPS document identifiers, rejects private and special-purpose addresses, pins the DNS result for the TLS request, refuses redirects, limits response size and duration, validates public-client metadata, coalesces concurrent lookups, and keeps a bounded TTL cache. The approval page identifies both the client-document host and callback host.
+
 ## Process model
 
 PowerShell 7 is the default shell. Windows shell argument construction uses `-NoLogo -NoProfile -NonInteractive -Command`; `cmd.exe` uses `/d /s /c`. PowerShell scripts use `pwsh.exe -File`. Python defaults to `python.exe` on Windows.

@@ -5,9 +5,9 @@ import type { AuthorizationParams, OAuthServerProvider } from "@modelcontextprot
 import type { Request, Response } from "express";
 
 import { tokensEqual } from "./auth.js";
+import { CimdOAuthStore } from "./cimd-oauth-store.js";
 import type { AppConfig } from "./config.js";
 import { OAUTH_SCOPES } from "./tool-metadata.js";
-import { PersistentOAuthStore as SqliteOAuthStore } from "./oauth-store.js";
 
 export { OAUTH_SCOPES };
 
@@ -143,6 +143,14 @@ function renderAuthorizationPage(
   invalidKey: boolean,
 ): string {
   const clientName = client.client_name || "MCP 클라이언트";
+  let clientDocumentHost = "DCR 등록 클라이언트";
+  try {
+    if (client.client_id.startsWith("https://")) {
+      clientDocumentHost = new URL(client.client_id).host;
+    }
+  } catch {
+    // The client store has already validated CIMD identifiers.
+  }
   let redirectHost = params.redirectUri;
   try {
     redirectHost = new URL(params.redirectUri).host;
@@ -192,14 +200,14 @@ function renderAuthorizationPage(
       <input id="access_key" name="access_key" type="password" required autofocus autocomplete="current-password">
       <button type="submit">승인하고 MCP 클라이언트로 돌아가기</button>
     </form>
-    <small>콜백 대상: ${escapeHtml(redirectHost)} · 범위: ${escapeHtml(params.scopes?.join(" ") || OAUTH_SCOPES.join(" "))}</small>
+    <small>클라이언트 문서: ${escapeHtml(clientDocumentHost)} · 콜백 대상: ${escapeHtml(redirectHost)} · 범위: ${escapeHtml(params.scopes?.join(" ") || OAUTH_SCOPES.join(" "))}</small>
   </main>
 </body>
 </html>`;
 }
 
 export class RemoteDevOAuthProvider implements OAuthServerProvider {
-  readonly clientsStore: SqliteOAuthStore;
+  readonly clientsStore: CimdOAuthStore;
   readonly issuerUrl: URL;
   readonly resourceUrl: URL;
   private readonly authorizationCodes = new Map<string, AuthorizationCodeRecord>();
@@ -210,7 +218,7 @@ export class RemoteDevOAuthProvider implements OAuthServerProvider {
     }
     this.issuerUrl = new URL(config.oauthIssuerUrl);
     this.resourceUrl = new URL(config.oauthResourceUrl);
-    this.clientsStore = new SqliteOAuthStore(
+    this.clientsStore = new CimdOAuthStore(
       config.oauthStateFile,
       config.oauthAccessTokenTtlSeconds,
       config.oauthRefreshTokenTtlSeconds,

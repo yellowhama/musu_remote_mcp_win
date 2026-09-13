@@ -16,6 +16,7 @@ No critical correctness defect was found in the current foreground runtime. The 
 | Medium | Full hashing dominated large checkpoints | NTFS USN delta index with conservative fallback | 10,001-file benchmark and journal tests |
 | Medium | Whole-file OAuth JSON rewrites | SQLite WAL, strict schema, transactions, expiry indexes, legacy migration | OAuth store/integration tests |
 | Medium | OAuth module mixed presentation/provider/storage | storage extracted to `oauth-store.ts` | typecheck and suite |
+| High | CIMD URL retrieval could expose an SSRF path | canonical HTTPS identifiers, public-address filtering, DNS pinning, no redirects, bounded fetch and cache | CIMD unit and OAuth integration tests |
 
 ## Current security boundary
 
@@ -40,7 +41,7 @@ The USN index changes the dominant unchanged-workspace cost from hashing all fil
 - `npm run typecheck`: pass.
 - `npm run build`: pass.
 - `npm test`: **43 pass, 1 skipped**.
-- OAuth-focused tests: **5/5 pass**.
+- OAuth/CIMD-focused tests: **9/9 pass**.
 - Git diff whitespace check: pass; Git reports only expected CRLF-to-LF normalization warnings.
 - GitHub Actions: green for Origin, installer, retention, SDK v2, USN, and SQLite commits (run 34762770787).
 
@@ -48,7 +49,7 @@ The USN index changes the dominant unchanged-workspace cost from hashing all fil
 
 1. Separate gateway and worker identities with an ACL-restricted local transport.
 2. Add Event Log and metrics coverage.
-3. Complete a disposable-VM lifecycle test and a real ChatGPT connector OAuth round trip.
+3. Complete a disposable-VM lifecycle test and measure whether a real ChatGPT connector selects CIMD or DCR.
 4. Split the two largest modules and progressively strengthen the migrated adapter's public TypeScript interfaces.
 
 ## Rating

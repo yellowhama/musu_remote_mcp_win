@@ -117,6 +117,7 @@ export async function startHttpServer(
     } satisfies AuthRouterOptions;
     const oauthMetadata = {
       ...createOAuthMetadata(oauthRouterOptions),
+      client_id_metadata_document_supported: true,
       revocation_endpoint_auth_methods_supported: ["client_secret_post", "none"],
     };
     const issuerPath = oauthProvider.issuerUrl.pathname.replace(/\/$/, "");

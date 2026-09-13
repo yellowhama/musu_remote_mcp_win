@@ -107,6 +107,7 @@ describe("OAuth 2.1 MCP authorization", () => {
       token_endpoint: `${baseUrl}/token`,
       registration_endpoint: `${baseUrl}/register`,
       code_challenge_methods_supported: ["S256"],
+      client_id_metadata_document_supported: true,
       token_endpoint_auth_methods_supported: expect.arrayContaining(["none"]),
       revocation_endpoint_auth_methods_supported: expect.arrayContaining(["none"]),
     });
