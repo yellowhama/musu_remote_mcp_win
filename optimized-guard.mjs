@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { createMutationGate } from './checkpoint.mjs';
 import { snapshotter, safePath, inside } from './snapshot-targets.mjs';
 import { openJobs } from './jobs.mjs';
@@ -8,7 +9,7 @@ import { openJobs } from './jobs.mjs';
 if(!process.env.MCP_EDITABLE_ROOTS||!process.env.MCP_BACKUP_ROOT||!process.env.MCP_JOBS_ROOT)throw new Error('MCP_EDITABLE_ROOTS, MCP_BACKUP_ROOT and MCP_JOBS_ROOT are required');
 const configuredRoots=process.env.MCP_EDITABLE_ROOTS.split(',').map(value=>value.trim()).filter(Boolean);
 if(!configuredRoots.length||configuredRoots.some(root=>!path.isAbsolute(root)))throw new Error('MCP_EDITABLE_ROOTS must contain absolute paths');
-const roots=configuredRoots.map(root=>path.resolve(root));
+const roots=await Promise.all(configuredRoots.map(root=>fs.realpath(path.resolve(root))));
 if(new Set(roots).size!==roots.length||roots.some((root,index)=>roots.some((other,otherIndex)=>index!==otherIndex&&inside(root,other))))throw new Error('MCP_EDITABLE_ROOTS must contain unique non-overlapping paths');
 const backupRoot=path.resolve(process.env.MCP_BACKUP_ROOT);
 const jobsRoot=path.resolve(process.env.MCP_JOBS_ROOT);

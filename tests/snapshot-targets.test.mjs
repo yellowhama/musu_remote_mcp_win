@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { safePath, snapshotter, restoreToNewDirectory } from '../snapshot-targets.mjs';
 
 async function fixture(t, limits = {}) {
-  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'remote-dev-targets-'));
+  const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'remote-dev-targets-')));
   t.after(() => fs.rm(base, { recursive: true, force: true }));
   const roots = [path.join(base, 'code'), path.join(base, 'wiki')];
   for (const root of roots) await fs.mkdir(root);

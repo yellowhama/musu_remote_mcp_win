@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 
-const disposableRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'musu-guard-integration-'));
+const disposableRoot = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'musu-guard-integration-')));
 const codeRoot = path.join(disposableRoot, 'workspace', 'code');
 const wikiRoot = path.join(disposableRoot, 'workspace', 'wiki');
 const stateRoot = path.join(disposableRoot, 'state');

@@ -16,7 +16,8 @@ const absolute = (value, name) => {
   if (value.includes(',')) throw new Error(`${name} must not contain a comma`);
   return path.resolve(value);
 };
-const roots = config.editableRoots.map((value, index) => absolute(value, `editableRoots[${index}]`));
+const configuredRoots = config.editableRoots.map((value, index) => absolute(value, `editableRoots[${index}]`));
+const roots = await Promise.all(configuredRoots.map(root => fs.realpath(root)));
 const relativeInside = (root, value) => {
   const relative = path.relative(root, value);
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
@@ -27,12 +28,12 @@ if (roots.some((root, index) => roots.some((other, otherIndex) => index !== othe
 for (const root of roots) {
   const stat = await fs.stat(root);
   if (!stat.isDirectory()) throw new Error(`Editable root is not a directory: ${root}`);
-  if (path.relative(await fs.realpath(root), root) !== '') throw new Error(`Editable root must be canonical: ${root}`);
 }
 
 const stateRoot = absolute(config.stateRoot, 'stateRoot');
 const backupRoot = absolute(config.backupRoot, 'backupRoot');
-const defaultCwd = absolute(config.defaultCwd || roots[0], 'defaultCwd');
+const configuredDefaultCwd = absolute(config.defaultCwd || roots[0], 'defaultCwd');
+const defaultCwd = await fs.realpath(configuredDefaultCwd);
 if (!roots.some(root => relativeInside(root, defaultCwd))) throw new Error('defaultCwd must be inside an editable root');
 if (!(await fs.stat(defaultCwd)).isDirectory()) throw new Error('defaultCwd must be an existing directory');
 for (const protectedRoot of [stateRoot, backupRoot]) {
