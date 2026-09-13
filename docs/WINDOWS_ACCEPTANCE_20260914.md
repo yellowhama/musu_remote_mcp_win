@@ -13,7 +13,7 @@
 | Real ChatGPT OAuth | Capture ready; execution pending | Requires the operator's ChatGPT developer-mode session and fixed public tunnel |
 | CIMD versus DCR measurement | Capture tested; real result pending | dedicated route-scoped metrics key plus `Capture-ChatGPTCompatibility.ps1`; mock before/after test passes |
 
-The accepted run completed 52 vendor tests with one platform-specific skip, 67 adapter/native tests, dependency audit with zero known vulnerabilities, and the clean-VM service lifecycle. Its logs contain zero unsupported WinSW `refresh` calls and contain the expected injected-failure marker.
+The current harness run completed 53 vendor tests with one platform-specific skip, 69 adapter/native tests, dependency audit with zero known vulnerabilities, and the clean-VM service lifecycle. [Run 34770818016](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34770818016) includes the route-scoped metrics key and both acceptance-script tests. Its logs contain zero unsupported WinSW `refresh` calls and contain the expected injected-failure marker.
 
 ## Current workstation constraint
 

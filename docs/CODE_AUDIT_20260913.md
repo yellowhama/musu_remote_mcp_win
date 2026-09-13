@@ -45,12 +45,12 @@ The USN index changes the dominant unchanged-workspace cost from hashing all fil
 
 - `npm run typecheck`: pass.
 - `npm run build`: pass.
-- Vendor suite: **52 pass, 1 skipped**.
-- Adapter/native suite: **67/67 pass**.
+- Vendor suite: **53 pass, 1 skipped**.
+- Adapter/native suite: **69/69 pass**.
 - OAuth/CIMD and internal-auth focused tests: **19/19 pass**.
 - Production dependency audit: **0 known vulnerabilities**.
 - Git diff whitespace check: pass; Git reports only expected CRLF-to-LF normalization warnings.
-- GitHub Actions: [run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) passes build, all Windows tests, service install, ACL separation, restart, exact-point upgrade rollback, and uninstall.
+- GitHub Actions: [run 34770818016](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34770818016) passes build, all Windows and acceptance-harness tests, service install, ACL separation, restart, exact-point upgrade rollback, and uninstall.
 
 ## Open release gates
 

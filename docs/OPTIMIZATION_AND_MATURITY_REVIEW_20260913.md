@@ -73,10 +73,10 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 ## Verification evidence
 
 - TypeScript typecheck and build: pass.
-- Vendor suite: **52 pass, 1 POSIX-only skip** on Windows.
-- Adapter/native suite: **67/67 pass**, including real Job Object and two-process gateway/worker smoke tests.
+- Vendor suite: **53 pass, 1 POSIX-only skip** on Windows.
+- Adapter/native suite: **69/69 pass**, including real Job Object, two-process gateway/worker, and acceptance-capture tests.
 - Production dependency audit: **0 known vulnerabilities**.
-- Clean-VM service lifecycle: pass in [GitHub Actions run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484).
+- Clean-VM service lifecycle and acceptance harness: pass in [GitHub Actions run 34770818016](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34770818016).
 
 ## Primary references
 
