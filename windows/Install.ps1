@@ -158,7 +158,7 @@ try {
     Invoke-CheckedNative -Executable $icacls -FailureMessage 'Failed to grant service access to backups' -Arguments @($BackupRoot, '/grant', 'LOCAL SERVICE:(OI)(CI)M')
     if ($existingService) {
         Invoke-CheckedNative -Executable $serviceExecutable -FailureMessage 'Windows service stop failed' -Arguments @('stop')
-        Invoke-CheckedNative -Executable $serviceExecutable -FailureMessage 'Windows service refresh failed' -Arguments @('refresh')
+        # WinSW v2 reloads its adjacent XML when the wrapper process starts.
     } else {
         Invoke-CheckedNative -Executable $serviceExecutable -FailureMessage 'Windows service installation failed' -Arguments @('install')
         $installedNewService = $true
@@ -184,7 +184,6 @@ try {
             & $serviceExecutable uninstall 2>$null
         } elseif ($existingService) {
             if ($null -ne $previousServiceConfig) { [IO.File]::WriteAllBytes($serviceConfig, $previousServiceConfig) }
-            & $serviceExecutable refresh 2>$null
             if ($serviceWasRunning) { & $serviceExecutable start 2>$null }
         }
     }

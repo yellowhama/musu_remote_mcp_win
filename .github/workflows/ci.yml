@@ -47,8 +47,11 @@ jobs:
           Restart-Service MusuRemoteMcpWorker
           Restart-Service MusuRemoteMcpGateway
           if ((Invoke-RestMethod 'http://127.0.0.1:39391/health').status -ne 'ok') { throw 'Gateway health failed after restart' }
-          pwsh -File windows/Install-SplitService.ps1 -EditableRoot $work -PublicUrl 'http://127.0.0.1:39391' -StateRoot $state -BackupRoot $backup -MinFreeBytes 0 -TestFailAfterRefresh
-          if ($LASTEXITCODE -eq 0) { throw 'Injected upgrade failure unexpectedly succeeded' }
+          $upgradeOutput = & pwsh -File windows/Install-SplitService.ps1 -EditableRoot $work -PublicUrl 'http://127.0.0.1:39391' -StateRoot $state -BackupRoot $backup -MinFreeBytes 0 -TestFailAfterUpdate 2>&1
+          $upgradeExitCode = $LASTEXITCODE
+          $upgradeOutput | Write-Host
+          if ($upgradeExitCode -eq 0) { throw 'Injected upgrade failure unexpectedly succeeded' }
+          if (($upgradeOutput -join "`n") -notmatch 'Injected upgrade failure after service XML and ACL update') { throw 'Upgrade failed before the intended rollback checkpoint' }
           if ((Invoke-RestMethod 'http://127.0.0.1:39391/health').status -ne 'ok') { throw 'Gateway health failed after rollback' }
           pwsh -File windows/Uninstall-SplitService.ps1
           if (Get-Service MusuRemoteMcpGateway,MusuRemoteMcpWorker -ErrorAction SilentlyContinue) { throw 'Split services remain after uninstall' }

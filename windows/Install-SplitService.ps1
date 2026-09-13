@@ -8,7 +8,7 @@ param(
     [int]$Port = 39391,
     [int]$WorkerPort = 39392,
     [long]$MinFreeBytes = 10737418240,
-    [switch]$TestFailAfterRefresh
+    [switch]$TestFailAfterUpdate
 )
 
 $ErrorActionPreference = 'Stop'
@@ -127,7 +127,7 @@ try {
     foreach ($service in @(@($gatewayExe, $existingGateway), @($workerExe, $existingWorker))) {
         if ($service[1]) {
             Invoke-CheckedNative $service[0] 'Service stop failed' @('stop')
-            Invoke-CheckedNative $service[0] 'Service refresh failed' @('refresh')
+            # WinSW v2 reloads its adjacent XML when the wrapper process starts.
         } else {
             Invoke-CheckedNative $service[0] 'Service installation failed' @('install')
             $installed.Add($service[0])
@@ -147,7 +147,7 @@ try {
     Invoke-CheckedNative $icacls 'Failed to grant worker backup access' @($BackupRoot, '/grant', 'NT SERVICE\MusuRemoteMcpWorker:(OI)(CI)M')
     Invoke-CheckedNative $icacls 'Failed to deny gateway backup access' @($BackupRoot, '/deny', 'NT SERVICE\MusuRemoteMcpGateway:(OI)(CI)F')
 
-    if ($TestFailAfterRefresh) { throw 'Injected upgrade failure after service refresh and ACL update' }
+    if ($TestFailAfterUpdate) { throw 'Injected upgrade failure after service XML and ACL update' }
 
     Invoke-CheckedNative $workerExe 'Worker start failed' @('start')
     Invoke-CheckedNative $gatewayExe 'Gateway start failed' @('start')
@@ -169,8 +169,8 @@ try {
     }
     foreach ($target in $aclSnapshots.Keys) { try { Set-Acl -LiteralPath $target -AclObject $aclSnapshots[$target] } catch { Write-Warning "ACL rollback failed: $target" } }
     foreach ($source in $createdEventSources) { try { Remove-EventLog -Source $source } catch { Write-Warning "Event source rollback failed: $source" } }
-    if ($existingWorker) { & $workerExe refresh 2>$null; & $workerExe start 2>$null }
-    if ($existingGateway) { & $gatewayExe refresh 2>$null; & $gatewayExe start 2>$null }
+    if ($existingWorker) { & $workerExe start 2>$null }
+    if ($existingGateway) { & $gatewayExe start 2>$null }
     throw $failure
 }
 
