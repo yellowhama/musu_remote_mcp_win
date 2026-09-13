@@ -34,6 +34,7 @@ const ALL_TOOLS = [
   "write_file",
   "write_stdin",
 ] as const;
+const isWindows = process.platform === "win32";
 
 type ToolName = (typeof ALL_TOOLS)[number];
 type ToolResult = Awaited<ReturnType<Client["callTool"]>>;
@@ -195,7 +196,9 @@ describe.sequential("all registered MCP tools", () => {
 
   it("executes, polls, writes to, times out, lists, and terminates processes", async () => {
     const completed = await callOk("exec_command", {
-      cmd: "printf '%s\\n' \"$E2E_VALUE\"; pwd; printf 'stderr-ok' >&2; exit 7",
+      cmd: isWindows
+        ? "Write-Output $env:E2E_VALUE; (Get-Location).Path; [Console]::Error.Write('stderr-ok'); exit 7"
+        : "printf '%s\\n' \"$E2E_VALUE\"; pwd; printf 'stderr-ok' >&2; exit 7",
       workdir: testRoot,
       env: { E2E_VALUE: "env-ok" },
       yieldTimeMs: 3000,
@@ -204,9 +207,9 @@ describe.sequential("all registered MCP tools", () => {
     expect(String(completed.stdout)).toContain("env-ok");
     expect(String(completed.stdout)).toContain(testRoot);
     expect(await callOk("exec_command", {
-      cmd: "printf shell-ok",
+      cmd: isWindows ? "[Console]::Out.Write('shell-ok')" : "printf shell-ok",
       workdir: testRoot,
-      shell: "/bin/sh",
+      shell: isWindows ? "pwsh.exe" : "/bin/sh",
       login: false,
       yieldTimeMs: 3000,
     })).toMatchObject({ completed: true, exitCode: 0, stdout: "shell-ok" });
@@ -233,7 +236,7 @@ describe.sequential("all registered MCP tools", () => {
     expect(boundedOutput).toBe("x".repeat(20000));
 
     const timedOut = await callOk("exec_command", {
-      cmd: "sleep 10",
+      cmd: isWindows ? "Start-Sleep -Seconds 10" : "sleep 10",
       workdir: testRoot,
       timeoutMs: 100,
       yieldTimeMs: 3000,
@@ -279,26 +282,31 @@ describe.sequential("all registered MCP tools", () => {
       env: "script-env-ok",
       stdin: "script-stdin-ok",
     });
-    expect(String(script.scriptPath)).toMatch(/^\/tmp\/remote-dev-mcp-script-/);
+    expect(String(script.scriptPath)).toContain(path.join(os.tmpdir(), "remote-dev-mcp-script-"));
     const keptScript = await callOk("stat_path", { path: script.scriptPath });
-    expect(keptScript).toMatchObject({ type: "file", mode: "0700" });
+    expect(keptScript).toMatchObject({ type: "file" });
+    if (!isWindows) expect(keptScript).toMatchObject({ mode: "0700" });
     await callOk("remove_path", {
       path: path.dirname(String(script.scriptPath)),
       recursive: true,
       force: true,
     });
-    for (const request of [
-      { script: "printf default-bash-ok", expected: "default-bash-ok" },
-      { runtime: "bash", script: "printf bash-ok", expected: "bash-ok" },
-      { runtime: "sh", script: "printf sh-ok", expected: "sh-ok" },
-      { runtime: "python", script: "print('python-ok')", expected: "python-ok\n" },
-      {
-        runtime: "custom",
-        interpreter: "/bin/sh",
-        script: "printf custom-ok",
-        expected: "custom-ok",
-      },
-    ]) {
+    const runtimeRequests = isWindows
+      ? [
+          { script: "[Console]::Out.Write('default-powershell-ok')", expected: "default-powershell-ok" },
+          { runtime: "powershell", script: "[Console]::Out.Write('powershell-ok')", expected: "powershell-ok" },
+          { runtime: "node", script: "process.stdout.write('node-ok')", expected: "node-ok" },
+          { runtime: "python", script: "print('python-ok', end='')", expected: "python-ok" },
+          { runtime: "custom", interpreter: process.execPath, script: "process.stdout.write('custom-ok')", expected: "custom-ok" },
+        ]
+      : [
+          { script: "printf default-bash-ok", expected: "default-bash-ok" },
+          { runtime: "bash", script: "printf bash-ok", expected: "bash-ok" },
+          { runtime: "sh", script: "printf sh-ok", expected: "sh-ok" },
+          { runtime: "python", script: "print('python-ok')", expected: "python-ok\n" },
+          { runtime: "custom", interpreter: "/bin/sh", script: "printf custom-ok", expected: "custom-ok" },
+        ];
+    for (const request of runtimeRequests) {
       const runtimeResult = await callOk("run_script", {
         ...request,
         workdir: testRoot,
@@ -335,7 +343,8 @@ describe.sequential("all registered MCP tools", () => {
       sessionId: longSession,
       waitMs: 2000,
     });
-    expect(terminated).toMatchObject({ running: false, completed: true, signal: "SIGTERM" });
+    expect(terminated).toMatchObject({ running: false, completed: true });
+    if (!isWindows) expect(terminated).toMatchObject({ signal: "SIGTERM" });
   }, 30_000);
 
   it("handles text, metadata, listings, permissions, and unified patches", async () => {
@@ -358,10 +367,12 @@ describe.sequential("all registered MCP tools", () => {
       content: unicodeText,
       fileMode: "0640",
     });
-    expect(await callOk("stat_path", {
+    const initialStat = await callOk("stat_path", {
       path: "text/nested/unicode.txt",
       cwd: testRoot,
-    })).toMatchObject({ type: "file", mode: "0640" });
+    });
+    expect(initialStat).toMatchObject({ type: "file" });
+    if (!isWindows) expect(initialStat).toMatchObject({ mode: "0640" });
 
     await callOk("chmod_path", {
       path: "text/nested/unicode.txt",
@@ -375,10 +386,11 @@ describe.sequential("all registered MCP tools", () => {
       mode: "overwrite",
       fileMode: "0644",
     });
-    expect(await callOk("stat_path", {
+    const overwrittenStat = await callOk("stat_path", {
       path: "text/nested/unicode.txt",
       cwd: testRoot,
-    })).toMatchObject({ mode: "0644" });
+    });
+    if (!isWindows) expect(overwrittenStat).toMatchObject({ mode: "0644" });
 
     let offset = 0;
     let reconstructed = "";
@@ -497,7 +509,7 @@ describe.sequential("all registered MCP tools", () => {
     });
     expect(visible.entries).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ relativePath: "nested/unicode.txt", type: "file" }),
+        expect.objectContaining({ relativePath: path.join("nested", "unicode.txt"), type: "file" }),
       ]),
     );
     expect(visible.entries).not.toEqual(
@@ -511,14 +523,16 @@ describe.sequential("all registered MCP tools", () => {
     })).toMatchObject({ count: 2, truncated: true });
 
     await callOk("exec_command", {
-      cmd: "ln -s nested/unicode.txt text/unicode-link",
+      cmd: isWindows
+        ? "New-Item -ItemType SymbolicLink -Path 'text/unicode-link' -Target 'nested/unicode.txt' | Out-Null"
+        : "ln -s nested/unicode.txt text/unicode-link",
       workdir: testRoot,
       yieldTimeMs: 3000,
     });
     expect(await callOk("stat_path", {
       path: "text/unicode-link",
       cwd: testRoot,
-    })).toMatchObject({ type: "symlink", symlinkTarget: "nested/unicode.txt" });
+    })).toMatchObject({ type: "symlink", symlinkTarget: path.join("nested", "unicode.txt") });
 
     await callOk("write_file", {
       path: "patch-target.txt",
@@ -572,7 +586,7 @@ describe.sequential("all registered MCP tools", () => {
       content: "base\n",
     });
     await callOk("exec_command", {
-      cmd: "git init -q && git config user.email e2e@example.invalid && git config user.name E2E && git add value.txt && git commit -qm base",
+      cmd: "git init -q && git config core.autocrlf false && git config user.email e2e@example.invalid && git config user.name E2E && git add value.txt && git commit -qm base",
       workdir: path.join(testRoot, "three-way"),
       yieldTimeMs: 3000,
     });

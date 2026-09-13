@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "publicUrl": "https://mcp.example.com",
+  "editableRoots": [
+    "F:\\workspace\\musu-bee",
+    "F:\\workspace\\llm-wiki"
+  ],
+  "defaultCwd": "F:\\workspace\\musu-bee",
+  "stateRoot": "F:\\musu-remote-mcp-data\\state",
+  "backupRoot": "F:\\musu-remote-mcp-data\\backups",
+  "port": 39391,
+  "defaultShell": "pwsh.exe"
+}

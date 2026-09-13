@@ -464,7 +464,8 @@ export class FileService {
     const patchPath = path.join(temporaryDirectory, `${randomUUID()}.patch`);
     await writeFile(patchPath, patchText, "utf8");
 
-    const baseArguments = ["apply", "--unsafe-paths", "--whitespace=nowarn"];
+    // Keep patch bytes and line endings deterministic across Windows Git installations.
+    const baseArguments = ["-c", "core.autocrlf=false", "apply", "--unsafe-paths", "--whitespace=nowarn"];
     if (options.reverse) {
       baseArguments.push("--reverse");
     }

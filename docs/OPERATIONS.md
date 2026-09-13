@@ -1,40 +1,48 @@
-# Operations
+# Windows operations
 
-## Start and stop
-
-```powershell
-& '.\Start.ps1'
-& '.\Stop.ps1'
-docker compose ps
-```
-
-The MCP service should report `healthy`; the tunnel should report `Up`. The current public base URL is stored in `state/runtime.json`.
-
-## Client-side disabled errors
-
-If a client reports that the app or tool is disabled and the server has no matching `mcp_request` log, the request was blocked before reaching this service. Re-select the app for the message, verify it under the client's enabled apps, refresh the tool/action inventory, and reconnect OAuth if needed.
-
-## Logs
+## Health and status
 
 ```powershell
-docker compose logs --tail 200 mcp
-docker compose logs --tail 200 tunnel
+Invoke-WebRequest http://127.0.0.1:39391/health
+Get-Service MusuRemoteMcp
+Get-Service cloudflared
 ```
 
-Do not paste logs publicly without checking for repository paths and user data. Approval keys and access tokens should never be logged by this project.
+Expected local health is HTTP 200. An unauthenticated POST to `/mcp` must return 401. Inspect WinSW logs under `windows\service\logs` and Cloudflare's configured log path without copying secrets into support reports.
 
-## Backup verification
+## Start, stop, and restart
 
-Backup verification should stream each object, compare its digest to the filename, validate manifest references, and record the result. Perform restore drills into a new directory outside every editable root. Never overwrite live roots during a drill.
+```powershell
+Start-Service MusuRemoteMcp
+Stop-Service MusuRemoteMcp
+Restart-Service MusuRemoteMcp
+```
 
-## Capacity
+For foreground diagnostics, stop the service and run `pwsh -File .\windows\Start-Local.ps1` from the repository.
 
-Monitor object-store size, manifest count, free disk space, full-checkpoint duration, queue age, and failed or interrupted jobs. This release has no automatic retention or garbage collection. Delete nothing until a retention policy, dry run, and successful restore drill have been reviewed.
+## Configuration changes
 
-## Production hardening backlog
+Edit the ignored `config\windows.json`, validate that all roots are absolute, existing, canonical, unique, and non-overlapping, then restart the service. Changing `publicUrl` changes OAuth issuer/resource metadata and may require recreating the ChatGPT custom app.
 
-1. Separate the OAuth gateway and execution worker by UID, process, and mounts.
-2. Put backup writes behind a narrow broker that the shell worker cannot alter directly.
-3. Add a versioned incremental checkpoint index with fail-closed full-hash fallback.
-4. Add retention, mark-and-sweep garbage collection, and recovery tooling.
-5. Replace Quick Tunnel with a named tunnel and fixed domain.
+Never move `stateRoot` by copying only selected files. Stop the service, preserve the complete directory byte-for-byte with ACLs, update the configuration, and perform an OAuth login test.
+
+## Upgrade
+
+1. Stop `MusuRemoteMcp`.
+2. Back up `config\windows.json`, the complete state root, and the WinSW XML.
+3. Pull the reviewed source revision.
+4. Run `npm ci --prefix vendor`, `npm run build --prefix vendor`, and the test commands in the README.
+5. Start the service and check local health, remote health, OAuth, tool count, a read, and a disposable write/readback.
+6. Update cloudflared separately; Windows cloudflared does not auto-update.
+
+## Restore drill
+
+Use a selected manifest and restore only to a new empty directory outside every editable root. Verify object hashes and restored hashes before comparing with live content. The restore primitive does not reproduce NTFS ACLs, ownership, alternate data streams, symlinks, or junctions.
+
+## Incident response
+
+If an unexpected write occurs, stop both services, preserve state, backups, service logs, OAuth metadata, and the affected repository Git state. Revoke the affected OAuth grant, rotate the approval key offline, inspect checkpoint manifests, and restore into a new directory for comparison. Do not overwrite the live workspace during investigation.
+
+## Uninstall
+
+`windows\Uninstall-Service.ps1` removes only the MCP service registration. Remove Cloudflare service registration separately using Cloudflare's documented command. Source, configuration, state, backups, and ACLs remain for explicit review and recovery.

@@ -3,29 +3,46 @@ import { constants } from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 
-export const inside = (root, value) => value === root || value.startsWith(root + path.sep);
+export const inside = (root, value) => {
+  const relative = path.relative(root, value);
+  return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
+};
+const samePath = (left, right) => path.relative(left, right) === '';
 const excluded = new Set(['node_modules','target','.next','.git','.cache','test-results','playwright-report']);
 const stamp = s => `${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}:${s.ctimeMs}:${s.mode}`;
 export async function safePath(value, cwd, roots) {
   const file = path.resolve(cwd, value);
   const root = roots.find(r => inside(r, file));
   if (!root) throw new Error('Path outside editable code/wiki roots');
-  if (await fs.realpath(root) !== root) throw new Error('Workspace root must be canonical');
+  if (!samePath(await fs.realpath(root), root)) throw new Error('Workspace root must be canonical');
   let cursor = root;
   for (const part of path.relative(root, file).split(path.sep).filter(Boolean)) {
     cursor = path.join(cursor, part);
-    try { if ((await fs.lstat(cursor)).isSymbolicLink()) throw new Error('Symlink mutation path rejected'); }
+    try {
+      const stat = await fs.lstat(cursor);
+      if (stat.isSymbolicLink()) throw new Error('Symlink or junction mutation path rejected');
+      if (samePath(cursor, file) && stat.isFile() && stat.nlink > 1) throw new Error('Hard-linked mutation path rejected');
+    }
     catch (e) { if (e.code === 'ENOENT') break; throw e; }
   }
   return file;
 }
 export async function digestFile(file, signal) {
   const h = createHash('sha256');
+  const before = await fs.lstat(file);
+  if (before.isSymbolicLink()) {
+    const error = new Error('Symlink or junction backup object rejected');
+    error.code = 'ELOOP';
+    throw error;
+  }
   const handle = await fs.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   try {
-    if (!(await handle.stat()).isFile()) throw new Error('Expected regular file');
+    const opened = await handle.stat();
+    if (!opened.isFile()) throw new Error('Expected regular file');
+    if (opened.dev !== before.dev || opened.ino !== before.ino) throw new Error('File identity changed before read');
     const buffer = Buffer.alloc(1024 * 1024);
     for (;;) { signal?.throwIfAborted(); const { bytesRead } = await handle.read(buffer); if (!bytesRead) break; h.update(buffer.subarray(0,bytesRead)); }
+    if ((await handle.stat()).size !== opened.size) throw new Error('File changed during read');
     return h.digest('hex');
   } finally { await handle.close(); }
 }

@@ -662,7 +662,15 @@ export class ProcessManager {
       if (process.platform !== "win32") {
         process.kill(-pid, signal);
       } else {
-        managed.child.kill(signal);
+        // Node's Windows signal emulation only terminates the direct child.
+        // taskkill /T closes the complete command tree created for this session.
+        const killer = spawn("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+          windowsHide: true,
+          stdio: "ignore",
+        });
+        killer.on("error", (error) => {
+          managed.error ??= `Failed to terminate Windows process tree: ${errorMessage(error)}`;
+        });
       }
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;

@@ -5,7 +5,7 @@ import path from "node:path";
 import type { ProcessReadResult } from "./process-manager.js";
 import { ProcessManager } from "./process-manager.js";
 
-export type ScriptRuntime = "bash" | "sh" | "node" | "python" | "custom";
+export type ScriptRuntime = "bash" | "sh" | "powershell" | "node" | "python" | "custom";
 
 export interface RunScriptRequest {
   runtime: ScriptRuntime;
@@ -45,8 +45,15 @@ function runtimeDefinition(request: RunScriptRequest): RuntimeDefinition {
   const definitions: Record<Exclude<ScriptRuntime, "custom">, RuntimeDefinition> = {
     bash: { executable: request.interpreter || "bash", extension: ".sh" },
     sh: { executable: request.interpreter || "sh", extension: ".sh" },
+    powershell: {
+      executable: request.interpreter || "pwsh.exe",
+      extension: ".ps1",
+    },
     node: { executable: request.interpreter || process.execPath, extension: ".mjs" },
-    python: { executable: request.interpreter || "python3", extension: ".py" },
+    python: {
+      executable: request.interpreter || (process.platform === "win32" ? "python.exe" : "python3"),
+      extension: ".py",
+    },
   };
   return definitions[request.runtime];
 }
@@ -68,6 +75,7 @@ export async function runScript(
   await chmod(scriptPath, 0o700);
 
   const processArgs = [
+    ...(request.runtime === "powershell" ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-File"] : []),
     ...(request.interpreterArgs ?? []),
     scriptPath,
     ...(request.args ?? []),

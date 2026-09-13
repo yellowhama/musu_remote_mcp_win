@@ -1,34 +1,27 @@
-# Architecture
+# Windows native architecture
 
-## Request flow
+## Runtime
 
-```text
-Remote MCP client
-  -> HTTPS tunnel
-  -> OAuth 2.1 DCR/PKCE gateway
-  -> Streamable HTTP MCP server
-  -> optimized guard
-     -> target checkpoint -> direct file tool
-     -> durable job -> full checkpoint -> shell/script/patch/tree tool
-  -> content-addressed backup store
-```
+`windows/native-runtime.mjs` loads a strict JSON configuration, validates Windows paths and the OAuth public URL, initializes state, sets the upstream environment, and imports `entrypoint.mjs`. The HTTP server binds only to loopback. A separately managed Cloudflare named tunnel provides the fixed HTTPS origin used by ChatGPT and OAuth metadata.
 
-The upstream server registers its tools through `McpServer.registerTool`. `optimized-guard.mjs` wraps registration before the compiled upstream server is imported. Read-only tools remain direct. Process-control calls require the OAuth client that owns the process. Mutating file tools pass through a serialized target checkpoint. Deferred tools are available through the durable job API.
+The TypeScript application remains under `vendor/`. `windows/Install.ps1` installs its exact locked dependencies, builds it, and creates a local `node_modules` junction so the root safety adapter resolves the same dependency tree. No global npm packages are required.
 
-## Snapshot integrity
+## Service lifecycle
 
-`snapshot-targets.mjs` resolves configured roots to canonical absolute paths, rejects direct symlink traversal, streams SHA-256 hashes with bounded buffers, and stores immutable content-addressed objects. A new object is copied from a second stable read, synced, and atomically renamed. Existing objects are rehashed before reuse.
+Foreground mode runs through `windows/Start-Local.ps1`. Service mode uses a checksum-pinned WinSW executable and an XML definition containing absolute executable and configuration paths, delayed automatic start, rolling logs, restart on failure, and a 15-second stop timeout. Secrets are read from `stateRoot` and never placed in service arguments or XML.
 
-Each manifest maps original paths to object hashes, directory metadata, symlink metadata, or absent tombstones. A target checkpoint verifies path stamps again immediately before mutation. Full scans retry files that change during reading and fail closed when stability cannot be established.
+## Mutation boundary
 
-## Durable jobs
+`optimized-guard.mjs` intercepts tool registration. Direct mutations resolve against configured roots and receive target-only snapshots. Shell, script, patch, and broad tree mutations must be submitted as durable jobs and receive full-root snapshots before execution.
 
-`jobs.mjs` persists each state transition using write, sync, and atomic rename. Admission is serialized. An OAuth client owns each job and request key. Retrying an identical payload returns the original job; reusing a key for another payload is rejected. Incomplete jobs found after restart become `interrupted_unknown` and are never automatically replayed.
+`snapshot-targets.mjs` uses `path.relative` containment so Windows drive letters and case-insensitive paths are handled by the platform path implementation. It rejects traversal, non-canonical roots, symlinks, junctions, and direct hard-linked file mutations. Backup objects are addressed by SHA-256; new objects and manifests are written through a temporary file and rename.
 
-## Limits
+## Process model
 
-All snapshot and queue limits are finite. Worker count is capped at 64. Job output is bounded. Queue and history overflow reject new work without deleting durable idempotency records.
+PowerShell 7 is the default shell. Windows shell argument construction uses `-NoLogo -NoProfile -NonInteractive -Command`; `cmd.exe` uses `/d /s /c`. PowerShell scripts use `pwsh.exe -File`. Python defaults to `python.exe` on Windows.
 
-## Trust boundary
+Node's Windows signal emulation does not manage descendants. Process cancellation therefore launches `taskkill.exe /PID <pid> /T /F`. Session ownership remains bound to the authenticated OAuth client.
 
-Path checks protect direct file mutations, while authenticated shell commands intentionally remain open-world inside the container. A full checkpoint protects configured editable roots but cannot protect other mounts or external services reached by a command. See [../SECURITY.md](../SECURITY.md).
+## Trust model
+
+The network boundary is OAuth plus the HTTPS tunnel. The filesystem boundary is the Windows service account and NTFS ACLs. The adapter's editable-root checks are recovery and accident controls; unrestricted shell tools intentionally retain all permissions of the service identity.

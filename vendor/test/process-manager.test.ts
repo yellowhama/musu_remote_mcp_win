@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 
 import { ProcessManager } from "../src/process-manager.js";
 
@@ -21,8 +24,8 @@ describe("ProcessManager", () => {
   it("captures stdout, stderr, and exit state", async () => {
     manager = createManager();
     const sessionId = manager.start({
-      executable: "/bin/bash",
-      args: ["-c", "printf stdout; printf stderr >&2"],
+      executable: process.execPath,
+      args: ["-e", "process.stdout.write('stdout'); process.stderr.write('stderr')"],
       commandForDisplay: "test output",
       cwd: process.cwd(),
     });
@@ -44,8 +47,8 @@ describe("ProcessManager", () => {
   it("supports interactive stdin and closes cleanly", async () => {
     manager = createManager();
     const sessionId = manager.start({
-      executable: "/bin/cat",
-      args: [],
+      executable: process.execPath,
+      args: ["-e", "process.stdin.pipe(process.stdout)"],
       commandForDisplay: "cat",
       cwd: process.cwd(),
     });
@@ -62,8 +65,8 @@ describe("ProcessManager", () => {
   it("terminates a command when its timeout expires", async () => {
     manager = createManager();
     const sessionId = manager.start({
-      executable: "/bin/bash",
-      args: ["-c", "sleep 10"],
+      executable: process.execPath,
+      args: ["-e", "setTimeout(() => {}, 10000)"],
       commandForDisplay: "sleep 10",
       cwd: process.cwd(),
       timeoutMs: 50,
@@ -80,8 +83,8 @@ describe("ProcessManager", () => {
   it("handles a rejected initial stdin write without crashing the server", async () => {
     manager = createManager();
     const sessionId = manager.start({
-      executable: "/bin/bash",
-      args: ["-c", "true"],
+      executable: process.execPath,
+      args: ["-e", "process.exit(0)"],
       commandForDisplay: "true",
       cwd: process.cwd(),
       stdin: "x".repeat(1024 * 1024),
@@ -98,8 +101,8 @@ describe("ProcessManager", () => {
   it("rejects a follow-up stdin write without emitting an unhandled error", async () => {
     manager = createManager();
     const sessionId = manager.start({
-      executable: "/bin/bash",
-      args: ["-c", "exec 0<&-; printf ready; sleep 2"],
+      executable: process.execPath,
+      args: ["-e", "require('node:fs').closeSync(0); process.stdout.write('ready'); setTimeout(() => {}, 2000)"],
       commandForDisplay: "closed stdin",
       cwd: process.cwd(),
     });
@@ -133,6 +136,39 @@ describe("ProcessManager", () => {
     expect(first.output + second.output).not.toContain("�");
   });
 
+  it.skipIf(process.platform !== "win32")("terminates the complete Windows process tree", async () => {
+    manager = createManager();
+    const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), "remote-dev-mcp-tree-"));
+    const pidFile = path.join(temporaryDirectory, "grandchild.pid");
+    const parentScript = [
+      "const { spawn } = require('node:child_process');",
+      "const fs = require('node:fs');",
+      `const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', windowsHide: true });`,
+      `fs.writeFileSync(${JSON.stringify(pidFile)}, String(child.pid));`,
+      "setInterval(() => {}, 1000);",
+    ].join(" ");
+    const sessionId = manager.start({
+      executable: process.execPath,
+      args: ["-e", parentScript],
+      commandForDisplay: "Windows process tree",
+      cwd: process.cwd(),
+    });
+    try {
+      let grandchildPid = 0;
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        try { grandchildPid = Number(await readFile(pidFile, "utf8")); break; } catch {}
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(grandchildPid).toBeGreaterThan(0);
+      await manager.terminate(sessionId, "SIGTERM", 2000);
+      await manager.waitForExit(sessionId, 3000);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(() => process.kill(grandchildPid, 0)).toThrow();
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
   it("lists processes without pruning and expires completed sessions independently", async () => {
     manager = new ProcessManager({
       maxRetainedOutputBytes: 1024 * 1024,
@@ -141,8 +177,8 @@ describe("ProcessManager", () => {
       defaultMaxOutputBytes: 1024 * 1024,
     });
     const sessionId = manager.start({
-      executable: "/bin/bash",
-      args: ["-c", "true"],
+      executable: process.execPath,
+      args: ["-e", "process.exit(0)"],
       commandForDisplay: "true",
       cwd: process.cwd(),
     });

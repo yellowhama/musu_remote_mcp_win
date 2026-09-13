@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import path from "node:path";
 
 import { loadConfig } from "../src/config.js";
+
+const rootPath = path.parse(process.cwd()).root;
+const temporaryPath = path.join(rootPath, "tmp");
 
 describe("loadConfig", () => {
   it("requires authentication unless explicitly disabled", () => {
@@ -13,15 +17,15 @@ describe("loadConfig", () => {
       {
         MCP_AUTH_TOKEN: "secret",
         MCP_PORT: "4321",
-        MCP_DEFAULT_CWD: "/",
+        MCP_DEFAULT_CWD: rootPath,
         MCP_ALLOWED_HOSTS: "mcp.example.com,localhost",
       },
-      "/tmp",
+      temporaryPath,
     );
 
     expect(config).toMatchObject({
       port: 4321,
-      defaultCwd: "/",
+      defaultCwd: rootPath,
       trustProxyHops: 0,
       authToken: "secret",
       allowedHosts: ["mcp.example.com", "localhost"],
@@ -49,16 +53,16 @@ describe("loadConfig", () => {
         MCP_AUTH_TOKEN: "secret",
         MCP_OAUTH_ENABLED: "true",
         MCP_PUBLIC_URL: "https://mcp.example.com",
-        MCP_OAUTH_STATE_FILE: "/tmp/oauth-state.json",
+        MCP_OAUTH_STATE_FILE: path.join(temporaryPath, "oauth-state.json"),
       },
-      "/tmp",
+      temporaryPath,
     );
     expect(config).toMatchObject({
       oauthEnabled: true,
       oauthApprovalKey: "secret",
       oauthIssuerUrl: "https://mcp.example.com/",
       oauthResourceUrl: "https://mcp.example.com/mcp",
-      oauthStateFile: "/tmp/oauth-state.json",
+      oauthStateFile: path.join(temporaryPath, "oauth-state.json"),
     });
   });
 

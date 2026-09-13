@@ -5,12 +5,13 @@ import { createMutationGate } from './checkpoint.mjs';
 import { snapshotter, safePath, inside } from './snapshot-targets.mjs';
 import { openJobs } from './jobs.mjs';
 
-const configuredRoots=(process.env.MCP_EDITABLE_ROOTS||'/workspace/code,/workspace/wiki').split(',').map(value=>value.trim()).filter(Boolean);
+if(!process.env.MCP_EDITABLE_ROOTS||!process.env.MCP_BACKUP_ROOT||!process.env.MCP_JOBS_ROOT)throw new Error('MCP_EDITABLE_ROOTS, MCP_BACKUP_ROOT and MCP_JOBS_ROOT are required');
+const configuredRoots=process.env.MCP_EDITABLE_ROOTS.split(',').map(value=>value.trim()).filter(Boolean);
 if(!configuredRoots.length||configuredRoots.some(root=>!path.isAbsolute(root)))throw new Error('MCP_EDITABLE_ROOTS must contain absolute paths');
 const roots=configuredRoots.map(root=>path.resolve(root));
 if(new Set(roots).size!==roots.length||roots.some((root,index)=>roots.some((other,otherIndex)=>index!==otherIndex&&inside(root,other))))throw new Error('MCP_EDITABLE_ROOTS must contain unique non-overlapping paths');
-const backupRoot=path.resolve(process.env.MCP_BACKUP_ROOT||'/backups');
-const jobsRoot=path.resolve(process.env.MCP_JOBS_ROOT||'/state/jobs');
+const backupRoot=path.resolve(process.env.MCP_BACKUP_ROOT);
+const jobsRoot=path.resolve(process.env.MCP_JOBS_ROOT);
 const snapshot=snapshotter({roots,backupRoot,maxFiles:200000,maxFileBytes:256*1024*1024,maxTotalBytes:32*1024**3,workers:64});
 const fastSnapshot=snapshotter({roots,backupRoot,maxFiles:2000,maxFileBytes:128*1024*1024,maxTotalBytes:512*1024**2,workers:4});
 const gate=createMutationGate(async()=>({kind:'target-or-job'}),8);
@@ -32,7 +33,7 @@ async function targetsFor(name,args) {
     values=name==='move_path'?[source,destination]:[destination];
   }else throw new Error('Unknown mutating tool; use a reviewed job');
   const paths=await Promise.all(values.map(v=>safePath(v,cwd,roots)));
-  if(paths.some(p=>roots.includes(p)))throw new Error('Workspace-root mutation rejected');
+  if(paths.some(p=>roots.some(root=>inside(root,p)&&inside(p,root))))throw new Error('Workspace-root mutation rejected');
   return paths;
 }
 const original=McpServer.prototype.registerTool;

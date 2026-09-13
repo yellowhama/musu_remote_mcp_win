@@ -52,7 +52,7 @@ test('dependency directories are excluded; symlinks are stored without reading t
   await fs.symlink('/does-not-exist', path.join(root, 'link'));
   const result = await checkpoint('edit');
   const manifest = JSON.parse(await fs.readFile(path.join(backupRoot, 'manifests', `${result.id}.json`)));
-  assert.deepEqual(manifest.files, { link: { link: '/does-not-exist' } });
+  assert.deepEqual(manifest.files, { link: { link: path.resolve('/does-not-exist') } });
 });
 test('aborted client cannot execute mutation after checkpoint', async () => {
   const controller = new AbortController();
@@ -107,7 +107,7 @@ test('operator policy admits source beyond default 10000 without deleting or exc
   assert.equal((await fs.readdir(path.join(f.backupRoot, 'objects'))).length, 1);
   const manifest = JSON.parse(await fs.readFile(path.join(f.backupRoot, 'manifests', `${result.id}.json`)));
   assert.equal(Object.keys(manifest.files).length, 10001);
-  assert.equal(manifest.files['.local-build/unmerged-candidate/10000.txt'].size, 1);
+  assert.equal(manifest.files[path.join('.local-build', 'unmerged-candidate', '10000.txt')].size, 1);
 });
 
 test('file overflow reports source count and limit before any mutation', async t => {

@@ -8,6 +8,20 @@ import { runScript } from "./script-runner.js";
 import { runTool } from "./tool-result.js";
 import { TOOL_ANNOTATIONS, toolAuthMetadata } from "./tool-metadata.js";
 
+function shellArguments(executable: string, login: boolean, command: string): string[] {
+  if (process.platform !== "win32") {
+    return [login ? "-lc" : "-c", command];
+  }
+  const shellName = executable.toLowerCase().replaceAll("/", "\\").split("\\").at(-1);
+  if (shellName === "powershell.exe" || shellName === "powershell" || shellName === "pwsh.exe" || shellName === "pwsh") {
+    return ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command];
+  }
+  if (shellName === "cmd.exe" || shellName === "cmd") {
+    return ["/d", "/s", "/c", command];
+  }
+  return ["-c", command];
+}
+
 function processResult(result: Awaited<ReturnType<ProcessManager["read"]>>): Record<string, unknown> {
   return {
     ...result,
@@ -73,7 +87,7 @@ export function registerExecTools(
         login: z
           .boolean()
           .default(true)
-          .describe("Use login-shell semantics (-lc) instead of -c."),
+          .describe("Use login-shell semantics on POSIX. Windows shells ignore this option."),
         env: environmentSchema,
         stdin: z.string().optional().describe("Initial text written to stdin after spawn."),
         timeoutMs: timeoutSchema,
@@ -107,7 +121,7 @@ export function registerExecTools(
         const executable = shell || config.defaultShell;
         const sessionId = processManager.start({
           executable,
-          args: [login ? "-lc" : "-c", cmd],
+          args: shellArguments(executable, login, cmd),
           commandForDisplay: cmd,
           cwd,
           env,
@@ -130,8 +144,8 @@ export function registerExecTools(
         "Write a supplied script to a temporary executable file and run it with Bash, sh, Node.js, Python, or an arbitrary interpreter. Execution is unrestricted and has the MCP server's full host permissions. A successful start always returns a process session ID, current process state, and retained output.",
       inputSchema: {
         runtime: z
-          .enum(["bash", "sh", "node", "python", "custom"])
-          .default("bash")
+          .enum(["bash", "sh", "powershell", "node", "python", "custom"])
+          .default(process.platform === "win32" ? "powershell" : "bash")
           .describe("Script runtime. Use custom with interpreter for any other runtime."),
         script: z.string().describe("Complete script source."),
         workdir: z

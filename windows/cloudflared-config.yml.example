@@ -1,0 +1,6 @@
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: C:\Windows\System32\config\systemprofile\.cloudflared\REPLACE_WITH_TUNNEL_UUID.json
+ingress:
+  - hostname: mcp.example.com
+    service: http://127.0.0.1:39391
+  - service: http_status:404

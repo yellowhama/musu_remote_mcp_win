@@ -177,7 +177,10 @@ export function loadConfig(
     ),
     defaultCwd,
     defaultShell:
-      env.MCP_DEFAULT_SHELL?.trim() || env.SHELL?.trim() || "/bin/bash",
+      env.MCP_DEFAULT_SHELL?.trim() ||
+      (process.platform === "win32"
+        ? "pwsh.exe"
+        : env.SHELL?.trim() || "/bin/bash"),
     maxRequestBody: env.MCP_MAX_REQUEST_BODY?.trim() || "8mb",
     maxOutputBytes: parseInteger(
       env.MCP_MAX_OUTPUT_BYTES,

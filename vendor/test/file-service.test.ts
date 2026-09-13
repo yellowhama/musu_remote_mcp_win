@@ -222,7 +222,7 @@ describe("FileService", () => {
     );
   });
 
-  it("applies an explicit file mode when overwriting an existing file", async () => {
+  it.skipIf(process.platform === "win32")("applies an explicit POSIX file mode when overwriting an existing file", async () => {
     await files.writeFileContent(
       "mode.txt",
       undefined,
@@ -241,9 +241,13 @@ describe("FileService", () => {
       true,
       0o644,
     );
-    expect((await stat(path.join(temporaryDirectory, "mode.txt"))).mode & 0o777).toBe(
-      0o644,
-    );
+    if (process.platform !== "win32") {
+      expect((await stat(path.join(temporaryDirectory, "mode.txt"))).mode & 0o777).toBe(
+        0o644,
+      );
+    } else {
+      expect(await readFile(path.join(temporaryDirectory, "mode.txt"), "utf8")).toBe("second");
+    }
   });
 
   it("rejects a non-forced directory copy when the destination exists", async () => {

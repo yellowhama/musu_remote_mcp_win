@@ -9,3 +9,5 @@
 .env
 .env.*
 !.env.example
+/config/windows.json
+/windows/service/

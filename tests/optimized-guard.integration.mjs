@@ -1,19 +1,27 @@
-// Run ONLY in a fresh disposable Docker container without host mounts.
-import test from 'node:test';
+// Run only against the disposable roots created in this test process.
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import os from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as z from 'zod/v4';
 
-assert.equal(process.env.REMOTE_DEV_DISPOSABLE_GUARD_TEST, '1', 'Disposable-container opt-in required');
-assert.equal(process.platform, 'linux');
-await assert.rejects(fs.access('/state/jobs'), { code: 'ENOENT' });
-await fs.mkdir('/workspace/code', { recursive: true });
-await fs.mkdir('/workspace/wiki', { recursive: true });
-await fs.writeFile('/workspace/code/code.txt', 'original code 한글');
-await fs.writeFile('/workspace/wiki/page.md', 'original wiki 한글');
+const disposableRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'musu-guard-integration-'));
+const codeRoot = path.join(disposableRoot, 'workspace', 'code');
+const wikiRoot = path.join(disposableRoot, 'workspace', 'wiki');
+const stateRoot = path.join(disposableRoot, 'state');
+const backupRoot = path.join(disposableRoot, 'backups');
+process.env.MCP_EDITABLE_ROOTS = `${codeRoot},${wikiRoot}`;
+process.env.MCP_BACKUP_ROOT = backupRoot;
+process.env.MCP_JOBS_ROOT = path.join(stateRoot, 'jobs');
+await assert.rejects(fs.access(path.join(stateRoot, 'jobs')), { code: 'ENOENT' });
+await fs.mkdir(codeRoot, { recursive: true });
+await fs.mkdir(wikiRoot, { recursive: true });
+await fs.writeFile(path.join(codeRoot, 'code.txt'), 'original code 한글');
+await fs.writeFile(path.join(wikiRoot, 'page.md'), 'original wiki 한글');
+after(async () => fs.rm(disposableRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
 const captured = new Map();
 McpServer.prototype.registerTool = function(name, config, callback) {
   captured.set(name, { config, callback });
@@ -59,11 +67,11 @@ register('terminate_process', { sessionId: z.string().uuid(), signal: z.string()
   return respond({ sessionId: args.sessionId, running: false });
 });
 register('write_file', { path: z.string(), cwd: z.string().optional(), content: z.string() }, async args => {
-  await fs.writeFile(path.resolve(args.cwd || '/workspace/code', args.path), args.content);
+  await fs.writeFile(path.resolve(args.cwd || codeRoot, args.path), args.content);
   return respond({ written: true });
 });
 register('remove_path', { path: z.string(), cwd: z.string().optional(), recursive: z.boolean().default(false) }, async args => {
-  await fs.rm(path.resolve(args.cwd || '/workspace/code', args.path), { recursive: args.recursive });
+  await fs.rm(path.resolve(args.cwd || codeRoot, args.path), { recursive: args.recursive });
   return respond({ removed: true });
 });
 async function until(jobId, predicate) {
@@ -77,10 +85,10 @@ async function until(jobId, predicate) {
   assert.fail('Job failed to reach expected state');
 }
 async function manifest(id) {
-  const names = await fs.readdir('/backups/manifests');
+  const names = await fs.readdir(path.join(backupRoot, 'manifests'));
   const name = names.find(value => value.includes(id));
   assert.ok(name, `Missing manifest ${id}`);
-  return JSON.parse(await fs.readFile(`/backups/manifests/${name}`, 'utf8'));
+  return JSON.parse(await fs.readFile(path.join(backupRoot, 'manifests', name), 'utf8'));
 }
 
 test('deferred commands return submit guidance without execution', async () => {
@@ -96,10 +104,9 @@ test('direct code and relative wiki edits create target checkpoints preserving o
     assert.equal(response.isError, undefined);
     assert.equal(response.structuredContent.checkpoint.count, 1);
     const document = await manifest(response.structuredContent.checkpoint.id);
-    const encoded = JSON.stringify(document);
-    assert.ok(encoded.includes(path.resolve('/workspace/code', filename)));
-    const objectNames = await fs.readdir('/backups/objects');
-    const bodies = await Promise.all(objectNames.filter(name => !name.endsWith('.tmp')).map(name => fs.readFile(`/backups/objects/${name}`, 'utf8')));
+    assert.ok(Object.hasOwn(document.entries, path.resolve(codeRoot, filename)));
+    const objectNames = await fs.readdir(path.join(backupRoot, 'objects'));
+    const bodies = await Promise.all(objectNames.filter(name => !name.endsWith('.tmp')).map(name => fs.readFile(path.join(backupRoot, 'objects', name), 'utf8')));
     assert.ok(bodies.includes(oldText));
   }
 });
@@ -115,11 +122,12 @@ test('async jobs return and deduplicate, advance process sequence and persist te
   assert.ok(observedAfterSeq.includes(1));
   assert.equal(observedAfterSeq.includes(0), false);
   assert.equal(job.result.output, 'started\nfinished\n');
-  const persisted = JSON.parse(await fs.readFile(`/state/jobs/${job.id}.json`, 'utf8'));
+  const jobFile = path.join(stateRoot, 'jobs', `${job.id}.json`);
+  const persisted = JSON.parse(await fs.readFile(jobFile, 'utf8'));
   // In-memory terminal state can precede atomic disk rename; wait for durable terminal.
   if (persisted.state !== 'succeeded') {
     await delay(50);
-    assert.equal(JSON.parse(await fs.readFile(`/state/jobs/${job.id}.json`, 'utf8')).state, 'succeeded');
+    assert.equal(JSON.parse(await fs.readFile(jobFile, 'utf8')).state, 'succeeded');
   }
   assert.equal((await call('get_job', { jobId: job.id }, 'bob')).isError, true);
   for (const tool of ['read_process', 'write_stdin', 'terminate_process']) {
@@ -133,8 +141,8 @@ test('relative wiki removal via job is covered by the full checkpoint', async ()
   const response = await call('submit_job', { requestKey: 'remove-wiki', tool: 'remove_path', arguments: { path: '../wiki/page.md' } });
   const job = await until(response.structuredContent.id, job => job.state === 'succeeded');
   const document = await manifest(job.checkpoint.id);
-  assert.ok(JSON.stringify(document).includes('/workspace/wiki/page.md'));
-  await assert.rejects(fs.access('/workspace/wiki/page.md'), { code: 'ENOENT' });
+  assert.ok(Object.hasOwn(document.entries, path.join(wikiRoot, 'page.md')));
+  await assert.rejects(fs.access(path.join(wikiRoot, 'page.md')), { code: 'ENOENT' });
 });
 
 test('stdin control bypasses the serialized job queue and lets an interactive job finish', async () => {

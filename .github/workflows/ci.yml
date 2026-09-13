@@ -8,10 +8,28 @@ permissions:
   contents: read
 
 jobs:
-  docker-build-and-test:
-    runs-on: ubuntu-latest
+  windows-native-build-and-test:
+    runs-on: windows-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
-      - name: Build image and run embedded tests
-        run: docker build --tag remote-dev-mcp:test .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: vendor/package-lock.json
+      - name: Install exact dependencies
+        shell: pwsh
+        run: |
+          npm ci --prefix vendor
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Junction -Path node_modules -Target (Resolve-Path vendor/node_modules).Path | Out-Null
+      - name: Build and test upstream server
+        shell: pwsh
+        run: |
+          npm run build --prefix vendor
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm test --prefix vendor
+      - name: Test Windows adapter and native entrypoint
+        shell: pwsh
+        run: node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/jobs.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-native-smoke.test.mjs

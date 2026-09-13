@@ -152,7 +152,21 @@ export function createCheckpoint({ root, backupRoot, maxFiles = 10000, maxFileBy
           if (error.code !== 'ENOENT') throw error;
           const temporary = `${target}.${randomUUID()}.tmp`;
           await fs.writeFile(temporary, bytes, { flag: 'wx' });
-          await fs.rename(temporary, target);
+          try {
+            await fs.rename(temporary, target);
+          } catch (renameError) {
+            // Windows does not replace an existing destination during rename.
+            // Identical files can race to publish the same content-addressed object.
+            if (!['EEXIST', 'EPERM'].includes(renameError.code)) throw renameError;
+            try {
+              const existing = await fs.readFile(target);
+              if (hashBytes(existing) !== hash) throw new Error(`Corrupt backup object: ${hash}; mutation blocked`);
+              await fs.rm(temporary, { force: true });
+            } catch (verificationError) {
+              if (verificationError.code === 'ENOENT') throw renameError;
+              throw verificationError;
+            }
+          }
         }
         files[relative] = { sha256: hash, size: bytes.length, mode: before.mode };
       }
