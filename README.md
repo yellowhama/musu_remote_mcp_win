@@ -133,7 +133,7 @@ node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/jobs
 
 GitHub Actions runs the same build and test flow on `windows-latest` with Node.js 24. The native smoke test starts the real OAuth server, checks health 200 and unauthenticated MCP 401, verifies key creation, and terminates the process tree.
 
-See [the Dockerless research](docs/DOCKERLESS_WINDOWS_RESEARCH_20260913.md), [architecture](docs/ARCHITECTURE.md), and [operations](docs/OPERATIONS.md).
+See [the Dockerless research](docs/DOCKERLESS_WINDOWS_RESEARCH_20260913.md), [architecture](docs/ARCHITECTURE.md), [operations](docs/OPERATIONS.md), and [optimization and maturity review](docs/OPTIMIZATION_AND_MATURITY_REVIEW_20260913.md).
 
 ## License
 
