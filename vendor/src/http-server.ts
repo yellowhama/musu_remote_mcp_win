@@ -269,20 +269,19 @@ export async function startHttpServer(
   const close = async (): Promise<void> => {
     clearInterval(cleanupInterval);
     activeMcpRequests = 0;
+    const httpServerClosed = new Promise<void>((resolve, reject) => {
+      httpServer.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
     await modernMcpHandler.close();
     const legacyServers = [...activeLegacyServers];
     activeLegacyServers.clear();
     await Promise.allSettled(legacyServers.map((server) => server.close()));
     await services.processManager.shutdown();
-    await new Promise<void>((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve();
-        }
-      });
-    });
+    oauthProvider?.close();
+    await httpServerClosed;
     await new Promise<void>((resolve) => setImmediate(resolve));
   };
 

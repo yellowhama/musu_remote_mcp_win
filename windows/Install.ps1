@@ -40,8 +40,8 @@ function Invoke-CheckedNative {
     & $Executable @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$FailureMessage (exit $LASTEXITCODE)" }
 }
-$nodeMajor = [int]((& $node --version).TrimStart('v').Split('.')[0])
-if ($nodeMajor -lt 22) { throw 'Node.js 22 or newer is required. Node.js 24 LTS is recommended.' }
+$nodeVersion = [version]((& $node --version).TrimStart('v'))
+if ($nodeVersion -lt [version]'22.13.0') { throw 'Node.js 22.13.0 or newer is required.' }
 if ($Port -lt 1 -or $Port -gt 65535) { throw 'Port must be between 1 and 65535.' }
 foreach ($retentionDays in @($ManifestDays, $JobDays, $ArchiveDays, $LogDays)) {
     if ($retentionDays -lt 1 -or $retentionDays -gt 3650) { throw 'Retention days must be between 1 and 3650.' }

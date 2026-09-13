@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { createServer } from "node:net";
 import os from "node:os";
@@ -127,11 +127,12 @@ describe("OAuth endpoint security boundaries", () => {
         client_name: "x".repeat(257),
       } as never)).rejects.toThrow("client_name");
     } finally {
+      provider.close();
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
   });
 
-  it("rolls back failed state writes and revokes an entire token grant", async () => {
+  it("rejects an unusable state path and revokes an entire token grant", async () => {
     const temporaryDirectory = await mkdtemp(
       path.join(os.tmpdir(), "cokacremote-oauth-store-test-"),
     );
@@ -150,34 +151,19 @@ describe("OAuth endpoint security boundaries", () => {
       scope: "mcp:tools",
     };
 
+    let provider: RemoteDevOAuthProvider | undefined;
     try {
       const blockedDirectory = path.join(temporaryDirectory, "blocked-state-directory");
       await mkdir(blockedDirectory);
-      const failedProvider = new RemoteDevOAuthProvider(
+      expect(() => new RemoteDevOAuthProvider(
         loadConfig(
-          {
-            ...baseEnvironment,
-            MCP_OAUTH_STATE_FILE: path.join(blockedDirectory, "state.json"),
-          },
+          { ...baseEnvironment, MCP_OAUTH_STATE_FILE: blockedDirectory },
           temporaryDirectory,
         ),
-      );
-      await expect(
-        failedProvider.clientsStore.getClient(metadata.client_id),
-      ).resolves.toBeUndefined();
-      await rm(blockedDirectory, { recursive: true, force: true });
-      await writeFile(blockedDirectory, "block state persistence");
-      await expect(
-        failedProvider.clientsStore.registerClient(
-          metadata as Parameters<typeof failedProvider.clientsStore.registerClient>[0],
-        ),
-      ).rejects.toThrow();
-      await expect(
-        failedProvider.clientsStore.getClient(metadata.client_id),
-      ).resolves.toBeUndefined();
+      )).toThrow();
 
       const stateFile = path.join(temporaryDirectory, "valid-state.json");
-      const provider = new RemoteDevOAuthProvider(
+      provider = new RemoteDevOAuthProvider(
         loadConfig(
           { ...baseEnvironment, MCP_OAUTH_STATE_FILE: stateFile },
           temporaryDirectory,
@@ -208,6 +194,7 @@ describe("OAuth endpoint security boundaries", () => {
         ),
       ).resolves.toMatchObject({ status: "invalid" });
     } finally {
+      provider?.close();
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
   });

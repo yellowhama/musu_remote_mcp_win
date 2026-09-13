@@ -1,31 +1,15 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { randomBytes } from "node:crypto";
 import type { AuthInfo, OAuthClientInformationFull, OAuthTokenRevocationRequest, OAuthTokens } from "@modelcontextprotocol/server";
 import { InvalidClientMetadataError, InvalidGrantError, InvalidScopeError, InvalidTargetError, UnauthorizedClientError } from "@modelcontextprotocol/server-legacy/auth";
-import type { OAuthRegisteredClientsStore, AuthorizationParams, OAuthServerProvider } from "@modelcontextprotocol/server-legacy/auth";
+import type { AuthorizationParams, OAuthServerProvider } from "@modelcontextprotocol/server-legacy/auth";
 import type { Request, Response } from "express";
 
 import { tokensEqual } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { OAUTH_SCOPES } from "./tool-metadata.js";
+import { PersistentOAuthStore as SqliteOAuthStore } from "./oauth-store.js";
 
 export { OAUTH_SCOPES };
-
-interface StoredToken {
-  type: "access" | "refresh" | "used_refresh";
-  clientId: string;
-  scopes: string[];
-  expiresAt: number;
-  resource: string;
-  grantId?: string;
-}
-
-interface PersistedOAuthState {
-  version: 1;
-  clients: Record<string, OAuthClientInformationFull>;
-  tokens: Record<string, StoredToken>;
-}
 
 interface AuthorizationCodeRecord {
   clientId: string;
@@ -34,19 +18,6 @@ interface AuthorizationCodeRecord {
   resource: string;
   scopes: string[];
   expiresAt: number;
-}
-
-type RefreshResult =
-  | { status: "invalid" }
-  | { status: "invalid_scope" }
-  | { status: "ok"; tokens: OAuthTokens };
-
-function emptyState(): PersistedOAuthState {
-  return { version: 1, clients: {}, tokens: {} };
-}
-
-function tokenHash(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
 }
 
 function randomToken(): string {
@@ -151,283 +122,6 @@ function clientMetadataProblem(value: unknown): string | undefined {
   return undefined;
 }
 
-function isStoredToken(value: unknown): value is StoredToken {
-  if (!value || typeof value !== "object") {
-    return false;
-  }
-  const token = value as Partial<StoredToken>;
-  return (
-    (token.type === "access" || token.type === "refresh" || token.type === "used_refresh") &&
-    typeof token.clientId === "string" &&
-    Array.isArray(token.scopes) &&
-    token.scopes.every((scope) => typeof scope === "string") &&
-    typeof token.expiresAt === "number" &&
-    typeof token.resource === "string" &&
-    (token.grantId === undefined || typeof token.grantId === "string") &&
-    (token.type !== "used_refresh" || typeof token.grantId === "string")
-  );
-}
-
-function parseState(value: string): PersistedOAuthState {
-  const parsed = JSON.parse(value) as Partial<PersistedOAuthState>;
-  if (
-    parsed.version !== 1 ||
-    !parsed.clients ||
-    typeof parsed.clients !== "object" ||
-    Array.isArray(parsed.clients) ||
-    !parsed.tokens ||
-    typeof parsed.tokens !== "object" ||
-    Array.isArray(parsed.tokens) ||
-    !Object.values(parsed.tokens).every(isStoredToken)
-  ) {
-    throw new Error("Invalid OAuth state file format");
-  }
-  return parsed as PersistedOAuthState;
-}
-
-class PersistentOAuthStore implements OAuthRegisteredClientsStore {
-  private state = emptyState();
-  private loadPromise: Promise<void> | undefined;
-  private mutationQueue: Promise<void> = Promise.resolve();
-
-  constructor(
-    private readonly stateFile: string,
-    private readonly accessTokenTtlSeconds: number,
-    private readonly refreshTokenTtlSeconds: number,
-    private readonly maxRegisteredClients: number,
-  ) {}
-
-  private async ensureLoaded(): Promise<void> {
-    this.loadPromise ??= (async () => {
-      try {
-        this.state = parseState(await readFile(this.stateFile, "utf8"));
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-          throw error;
-        }
-      }
-    })();
-    await this.loadPromise;
-  }
-
-  private pruneExpired(): void {
-    const now = Date.now();
-    for (const [hash, token] of Object.entries(this.state.tokens)) {
-      if (token.expiresAt <= now) {
-        delete this.state.tokens[hash];
-      }
-    }
-  }
-
-  private async persist(): Promise<void> {
-    const directory = path.dirname(this.stateFile);
-    await mkdir(directory, { recursive: true, mode: 0o700 });
-    const temporaryFile = `${this.stateFile}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`;
-    try {
-      await writeFile(temporaryFile, `${JSON.stringify(this.state, null, 2)}\n`, {
-        encoding: "utf8",
-        flag: "wx",
-        mode: 0o600,
-      });
-      await rename(temporaryFile, this.stateFile);
-    } catch (error) {
-      await unlink(temporaryFile).catch(() => undefined);
-      throw error;
-    }
-  }
-
-  private async mutate<T>(operation: () => T | Promise<T>): Promise<T> {
-    await this.ensureLoaded();
-    const pending = this.mutationQueue.then(async () => {
-      const snapshot = structuredClone(this.state);
-      try {
-        this.pruneExpired();
-        const result = await operation();
-        await this.persist();
-        return result;
-      } catch (error) {
-        this.state = snapshot;
-        throw error;
-      }
-    });
-    this.mutationQueue = pending.then(
-      () => undefined,
-      () => undefined,
-    );
-    return pending;
-  }
-
-  async getClient(clientId: string): Promise<OAuthClientInformationFull | undefined> {
-    await this.ensureLoaded();
-    await this.mutationQueue;
-    const client = this.state.clients[clientId];
-    if (!client || client.client_id !== clientId || clientMetadataProblem(client)) {
-      return undefined;
-    }
-    return client;
-  }
-
-  async registerClient(
-    client: Omit<OAuthClientInformationFull, "client_id" | "client_id_issued_at">,
-  ): Promise<OAuthClientInformationFull> {
-    const supplied = client as Partial<OAuthClientInformationFull>;
-    const registered: OAuthClientInformationFull = {
-      ...client,
-      token_endpoint_auth_method:
-        client.token_endpoint_auth_method ?? "client_secret_post",
-      grant_types: client.grant_types ?? ["authorization_code"],
-      response_types: client.response_types ?? ["code"],
-      client_id: supplied.client_id || randomUUID(),
-      client_id_issued_at: supplied.client_id_issued_at || Math.floor(Date.now() / 1000),
-    };
-    const problem = clientMetadataProblem(registered);
-    if (problem) {
-      throw new InvalidClientMetadataError(problem);
-    }
-    return this.mutate(() => {
-      if (!this.state.clients[registered.client_id] &&
-          Object.keys(this.state.clients).length >= this.maxRegisteredClients) {
-        throw new InvalidClientMetadataError(
-          `Registered client limit reached: ${this.maxRegisteredClients}`,
-        );
-      }
-      this.state.clients[registered.client_id] = registered;
-      return registered;
-    });
-  }
-
-  async issueTokenPair(
-    clientId: string,
-    scopes: string[],
-    resource: string,
-    issueRefreshToken = true,
-  ): Promise<OAuthTokens> {
-    return this.mutate(() =>
-      this.issueTokenPairWithoutPersist(
-        clientId,
-        scopes,
-        resource,
-        randomUUID(),
-        issueRefreshToken,
-      ),
-    );
-  }
-
-  private issueTokenPairWithoutPersist(
-    clientId: string,
-    scopes: string[],
-    resource: string,
-    grantId: string,
-    issueRefreshToken = true,
-  ): OAuthTokens {
-    const accessToken = randomToken();
-    const now = Date.now();
-    this.state.tokens[tokenHash(accessToken)] = {
-      type: "access",
-      clientId,
-      scopes,
-      expiresAt: now + this.accessTokenTtlSeconds * 1000,
-      resource,
-      grantId,
-    };
-    const tokens: OAuthTokens = {
-      access_token: accessToken,
-      token_type: "Bearer",
-      expires_in: this.accessTokenTtlSeconds,
-      scope: scopes.join(" "),
-    };
-    if (issueRefreshToken) {
-      const refreshToken = randomToken();
-      this.state.tokens[tokenHash(refreshToken)] = {
-        type: "refresh",
-        clientId,
-        scopes,
-        expiresAt: now + this.refreshTokenTtlSeconds * 1000,
-        resource,
-        grantId,
-      };
-      tokens.refresh_token = refreshToken;
-    }
-    return tokens;
-  }
-
-  private revokeGrantWithoutPersist(grantId: string, preserveReplayEvidence = false): void {
-    for (const [hash, token] of Object.entries(this.state.tokens)) {
-      if (
-        token.grantId === grantId &&
-        !(preserveReplayEvidence && token.type === "used_refresh")
-      ) {
-        delete this.state.tokens[hash];
-      }
-    }
-  }
-
-  async rotateRefreshToken(
-    refreshToken: string,
-    clientId: string,
-    resource: string,
-    requestedScopes: string[] | undefined,
-  ): Promise<RefreshResult> {
-    return this.mutate(() => {
-      const hash = tokenHash(refreshToken);
-      const current = this.state.tokens[hash];
-      if (
-        !current ||
-        current.clientId !== clientId ||
-        current.resource !== resource ||
-        current.expiresAt <= Date.now()
-      ) {
-        return { status: "invalid" };
-      }
-      if (current.type === "used_refresh") {
-        this.revokeGrantWithoutPersist(current.grantId!, true);
-        return { status: "invalid" };
-      }
-      if (current.type !== "refresh") {
-        return { status: "invalid" };
-      }
-      const scopes = requestedScopes ?? current.scopes;
-      if (!scopes.every((scope) => current.scopes.includes(scope))) {
-        return { status: "invalid_scope" };
-      }
-      const grantId = current.grantId ?? randomUUID();
-      this.state.tokens[hash] = { ...current, type: "used_refresh", grantId };
-      return {
-        status: "ok",
-        tokens: this.issueTokenPairWithoutPersist(clientId, scopes, resource, grantId),
-      };
-    });
-  }
-
-  async getAccessToken(token: string): Promise<StoredToken | undefined> {
-    await this.ensureLoaded();
-    await this.mutationQueue;
-    const stored = this.state.tokens[tokenHash(token)];
-    if (!stored || stored.type !== "access" || stored.expiresAt <= Date.now()) {
-      return undefined;
-    }
-    const client = this.state.clients[stored.clientId];
-    if (!client || clientMetadataProblem(client)) {
-      return undefined;
-    }
-    return stored;
-  }
-
-  async revoke(token: string, clientId: string): Promise<void> {
-    await this.mutate(() => {
-      const hash = tokenHash(token);
-      const stored = this.state.tokens[hash];
-      if (stored?.clientId === clientId) {
-        if (stored.grantId) {
-          this.revokeGrantWithoutPersist(stored.grantId);
-        } else {
-          delete this.state.tokens[hash];
-        }
-      }
-    });
-  }
-}
-
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -505,7 +199,7 @@ function renderAuthorizationPage(
 }
 
 export class RemoteDevOAuthProvider implements OAuthServerProvider {
-  readonly clientsStore: PersistentOAuthStore;
+  readonly clientsStore: SqliteOAuthStore;
   readonly issuerUrl: URL;
   readonly resourceUrl: URL;
   private readonly authorizationCodes = new Map<string, AuthorizationCodeRecord>();
@@ -516,12 +210,17 @@ export class RemoteDevOAuthProvider implements OAuthServerProvider {
     }
     this.issuerUrl = new URL(config.oauthIssuerUrl);
     this.resourceUrl = new URL(config.oauthResourceUrl);
-    this.clientsStore = new PersistentOAuthStore(
+    this.clientsStore = new SqliteOAuthStore(
       config.oauthStateFile,
       config.oauthAccessTokenTtlSeconds,
       config.oauthRefreshTokenTtlSeconds,
       config.oauthMaxRegisteredClients,
+      clientMetadataProblem,
     );
+  }
+
+  close(): void {
+    this.clientsStore.close();
   }
 
   private validateResource(resource: URL | undefined): string {

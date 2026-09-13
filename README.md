@@ -6,7 +6,7 @@ This repository is the Windows edition of [remote_dev_mcp](https://github.com/ye
 
 ## Capabilities
 
-- Native Windows 11 execution with Node.js 22+; Node.js 24 LTS is recommended
+- Native Windows 11 execution with Node.js 22.13+
 - PowerShell 7 command and script execution with UTF-8 output preservation
 - 23 MCP tools, OAuth DCR/PKCE/refresh/revocation, client-owned jobs
 - Target checkpoints for direct edits and full checkpoints before shell/script/patch jobs
@@ -24,7 +24,7 @@ The OAuth gateway, execution worker, state, and backups share one service identi
 ## Requirements
 
 - 64-bit Windows 11 or Windows Server 2022+
-- [Node.js](https://nodejs.org/en/download) 22 or newer, installed system-wide for service mode
+- [Node.js](https://nodejs.org/en/download) 22.13 or newer, installed system-wide for service mode
 - PowerShell 7 or newer, installed system-wide for service mode
 - Git available on `PATH` for patch operations
 - Administrator access only when installing the Windows service or Cloudflare service

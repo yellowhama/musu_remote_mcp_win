@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -322,5 +323,8 @@ describe("OAuth 2.1 MCP authorization", () => {
     const persisted = await readFile(stateFile, "utf8");
     expect(persisted).not.toContain(tokens.access_token);
     expect(persisted).not.toContain(tokens.refresh_token);
+    const database = new DatabaseSync(stateFile, { readOnly: true });
+    expect(database.prepare("PRAGMA journal_mode").get()).toMatchObject({ journal_mode: "wal" });
+    database.close();
   });
 });

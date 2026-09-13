@@ -6,7 +6,7 @@
   "description": "Full-access remote development MCP server for VPS and EC2 hosts",
   "type": "module",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
