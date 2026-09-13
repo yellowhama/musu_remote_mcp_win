@@ -24,6 +24,17 @@ $winswSha256 = '05B82D46AD331CC16BDC00DE5C6332C1EF818DF8CEEFCD49C726553209B3A0DA
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7 or newer is required.' }
 $node = (Get-Command node -ErrorAction Stop).Source
 $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
+$npm = (Get-Command npm -ErrorAction Stop).Source
+$icacls = (Get-Command icacls.exe -ErrorAction Stop).Source
+function Invoke-CheckedNative {
+    param(
+        [Parameter(Mandatory = $true)][string]$Executable,
+        [Parameter(Mandatory = $true)][string]$FailureMessage,
+        [string[]]$Arguments = @()
+    )
+    & $Executable @Arguments
+    if ($LASTEXITCODE -ne 0) { throw "$FailureMessage (exit $LASTEXITCODE)" }
+}
 $nodeMajor = [int]((& $node --version).TrimStart('v').Split('.')[0])
 if ($nodeMajor -lt 22) { throw 'Node.js 22 or newer is required. Node.js 24 LTS is recommended.' }
 if ($Port -lt 1 -or $Port -gt 65535) { throw 'Port must be between 1 and 65535.' }
@@ -52,10 +63,8 @@ if ((Test-PathInside $StateRoot $BackupRoot) -or (Test-PathInside $BackupRoot $S
 New-Item -ItemType Directory -Force -Path $configDirectory, $StateRoot, $BackupRoot | Out-Null
 
 Write-Host 'Installing exact npm dependencies and building TypeScript...'
-& npm ci --prefix (Join-Path $projectRoot 'vendor')
-if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
-& npm run build --prefix (Join-Path $projectRoot 'vendor')
-if ($LASTEXITCODE -ne 0) { throw 'TypeScript build failed' }
+Invoke-CheckedNative -Executable $npm -FailureMessage 'npm ci failed' -Arguments @('ci', '--prefix', (Join-Path $projectRoot 'vendor'))
+Invoke-CheckedNative -Executable $npm -FailureMessage 'TypeScript build failed' -Arguments @('run', 'build', '--prefix', (Join-Path $projectRoot 'vendor'))
 $rootModules = Join-Path $projectRoot 'node_modules'
 $vendorModules = Join-Path $projectRoot 'vendor\node_modules'
 if (-not (Test-Path -LiteralPath $rootModules)) {
@@ -77,16 +86,27 @@ $configuration = [ordered]@{
     port = $Port
     defaultShell = $pwsh
 }
-$configuration | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $configFile -Encoding utf8NoBOM
-$env:MCP_STATE_ROOT = $StateRoot
-& $node (Join-Path $projectRoot 'setup-state.mjs')
-if ($LASTEXITCODE -ne 0) { throw 'Authentication state initialization failed' }
+$previousConfig = if (Test-Path -LiteralPath $configFile -PathType Leaf) { [IO.File]::ReadAllBytes($configFile) } else { $null }
+$previousServiceConfig = if (Test-Path -LiteralPath $serviceConfig -PathType Leaf) { [IO.File]::ReadAllBytes($serviceConfig) } else { $null }
+$existingService = if ($Service) { Get-Service -Name 'MusuRemoteMcp' -ErrorAction SilentlyContinue } else { $null }
+$serviceWasRunning = $existingService -and $existingService.Status -eq 'Running'
+$installedNewService = $false
+$aclSnapshots = @{}
+$aclTargets = @($StateRoot)
+if ($Service) { $aclTargets += @($projectRoot) + $roots + @($BackupRoot) }
+foreach ($target in ($aclTargets | Select-Object -Unique)) { $aclSnapshots[$target] = Get-Acl -LiteralPath $target }
 
-$currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-& icacls.exe $StateRoot /inheritance:r /grant:r "${currentIdentity}:(OI)(CI)F" 'SYSTEM:(OI)(CI)F' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Failed to protect the state directory ACL' }
+try {
+    $configTemporary = "$configFile.$PID.tmp"
+    $configuration | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $configTemporary -Encoding utf8NoBOM
+    Move-Item -LiteralPath $configTemporary -Destination $configFile -Force
+    $env:MCP_STATE_ROOT = $StateRoot
+    Invoke-CheckedNative -Executable $node -FailureMessage 'Authentication state initialization failed' -Arguments @((Join-Path $projectRoot 'setup-state.mjs'))
 
-if ($Service) {
+    $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    Invoke-CheckedNative -Executable $icacls -FailureMessage 'Failed to protect the state directory ACL' -Arguments @($StateRoot, '/inheritance:r', '/grant:r', "${currentIdentity}:(OI)(CI)F", 'SYSTEM:(OI)(CI)F')
+
+    if ($Service) {
     $administrator = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $administrator) { throw 'Run PowerShell as Administrator when using -Service.' }
     if ($node.StartsWith($env:USERPROFILE, [StringComparison]::OrdinalIgnoreCase) -or $pwsh.StartsWith($env:USERPROFILE, [StringComparison]::OrdinalIgnoreCase)) {
@@ -119,21 +139,50 @@ if ($Service) {
     $logging = $xml.CreateElement('log'); $logging.SetAttribute('mode', 'roll'); [void]$xml.service.AppendChild($logging)
     $failure = $xml.CreateElement('onfailure'); $failure.SetAttribute('action', 'restart'); $failure.SetAttribute('delay', '10 sec'); [void]$xml.service.AppendChild($failure)
     $xml.Save($serviceConfig)
-    & icacls.exe $projectRoot /grant 'LOCAL SERVICE:(OI)(CI)RX' | Out-Null
-    foreach ($root in $roots) { & icacls.exe $root /grant 'LOCAL SERVICE:(OI)(CI)M' | Out-Null }
-    & icacls.exe $StateRoot /grant 'LOCAL SERVICE:(OI)(CI)M' | Out-Null
-    & icacls.exe $BackupRoot /grant 'LOCAL SERVICE:(OI)(CI)M' | Out-Null
-    $existingService = Get-Service -Name 'MusuRemoteMcp' -ErrorAction SilentlyContinue
-    if ($existingService) {
-        & $serviceExecutable stop
-        & $serviceExecutable refresh
-        if ($LASTEXITCODE -ne 0) { throw 'Windows service refresh failed' }
-    } else {
-        & $serviceExecutable install
-        if ($LASTEXITCODE -ne 0) { throw 'Windows service installation failed' }
+    Invoke-CheckedNative -Executable $icacls -FailureMessage 'Failed to grant service read access to the application' -Arguments @($projectRoot, '/grant', 'LOCAL SERVICE:(OI)(CI)RX')
+    foreach ($root in $roots) {
+        Invoke-CheckedNative -Executable $icacls -FailureMessage "Failed to grant service modify access to $root" -Arguments @($root, '/grant', 'LOCAL SERVICE:(OI)(CI)M')
     }
-    & $serviceExecutable start
-    if ($LASTEXITCODE -ne 0) { throw 'Windows service start failed' }
+    Invoke-CheckedNative -Executable $icacls -FailureMessage 'Failed to grant service access to state' -Arguments @($StateRoot, '/grant', 'LOCAL SERVICE:(OI)(CI)M')
+    Invoke-CheckedNative -Executable $icacls -FailureMessage 'Failed to grant service access to backups' -Arguments @($BackupRoot, '/grant', 'LOCAL SERVICE:(OI)(CI)M')
+    if ($existingService) {
+        Invoke-CheckedNative -Executable $serviceExecutable -FailureMessage 'Windows service stop failed' -Arguments @('stop')
+        Invoke-CheckedNative -Executable $serviceExecutable -FailureMessage 'Windows service refresh failed' -Arguments @('refresh')
+    } else {
+        Invoke-CheckedNative -Executable $serviceExecutable -FailureMessage 'Windows service installation failed' -Arguments @('install')
+        $installedNewService = $true
+    }
+    Invoke-CheckedNative -Executable $serviceExecutable -FailureMessage 'Windows service start failed' -Arguments @('start')
+    $healthy = $false
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        try {
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 2
+            if ($health.status -eq 'ok') { $healthy = $true; break }
+        } catch { Start-Sleep -Milliseconds 500 }
+    }
+    if (-not $healthy) { throw 'Windows service did not become healthy within 30 attempts' }
+    }
+} catch {
+    $failure = $_
+    if ($configTemporary -and (Test-Path -LiteralPath $configTemporary -PathType Leaf)) {
+        Remove-Item -LiteralPath $configTemporary -Force
+    }
+    if ($Service -and (Test-Path -LiteralPath $serviceExecutable -PathType Leaf)) {
+        if ($installedNewService) {
+            & $serviceExecutable stop 2>$null
+            & $serviceExecutable uninstall 2>$null
+        } elseif ($existingService) {
+            if ($null -ne $previousServiceConfig) { [IO.File]::WriteAllBytes($serviceConfig, $previousServiceConfig) }
+            & $serviceExecutable refresh 2>$null
+            if ($serviceWasRunning) { & $serviceExecutable start 2>$null }
+        }
+    }
+    if ($null -ne $previousConfig) { [IO.File]::WriteAllBytes($configFile, $previousConfig) }
+    elseif (Test-Path -LiteralPath $configFile -PathType Leaf) { Remove-Item -LiteralPath $configFile -Force }
+    foreach ($target in $aclSnapshots.Keys) {
+        try { Set-Acl -LiteralPath $target -AclObject $aclSnapshots[$target] } catch { Write-Warning "Failed to restore ACL for ${target}: $($_.Exception.Message)" }
+    }
+    throw $failure
 }
 
 Write-Host "Configuration: $configFile"
