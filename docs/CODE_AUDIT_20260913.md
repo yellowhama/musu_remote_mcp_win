@@ -25,6 +25,7 @@ Qualitative score: **8.5/10 for a trusted personal development PC; not suitable 
 | Medium | Git could rewrite LF patches to CRLF under host `core.autocrlf` | Per-command `core.autocrlf=false` for patch application | Unified and three-way patch integration tests |
 | Medium | POSIX mode tests produced false failures on NTFS | Windows ACL contract documented; POSIX-only assertions gated | 41 applicable upstream tests pass |
 | Medium | State key relied on ineffective Windows `chmod` semantics | Installer restricts state DACL with `icacls` | Installer execution and ACL inspection |
+| Medium | Terminal job state became visible in memory before its atomic state-file write completed | Build and save the next record before publishing it in memory; remove timing delay from regression | Repeated job tests and full adapter suite pass |
 
 ## Remaining risks
 

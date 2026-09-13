@@ -51,12 +51,19 @@ export async function openJobs(directory,{maxPending=4,maxRecords=2000}={}) {
       queue=queue.then(async()=>{
         try{
           controller.signal.throwIfAborted();
-          const update=async(data)=>{Object.assign(job,data,{updatedAt:new Date().toISOString()});await save(job);};
+          const update=async(data)=>{
+            const next={...job,...data,updatedAt:new Date().toISOString()};
+            await save(next);
+            Object.assign(job,next);
+          };
           await update({state:'backing_up'});
           const result=await operation({signal:controller.signal,update});
           controller.signal.throwIfAborted();
           await update({state:result?.exitCode!=null&&result.exitCode!==0?'failed':'succeeded',result});
-        }catch(e){job.state=controller.signal.aborted?'cancelled':'failed';job.error=String(e.message).slice(0,2000);try{await save(job);}catch(err){console.error('Job terminal state write failed:',err.message);}}
+        }catch(e){
+          const failed={...job,state:controller.signal.aborted?'cancelled':'failed',error:String(e.message).slice(0,2000),updatedAt:new Date().toISOString()};
+          try{await save(failed);Object.assign(job,failed);}catch(err){console.error('Job terminal state write failed:',err.message);}
+        }
         finally{controllers.delete(job.id);}
       }).catch(e=>console.error('Job queue failed:',e.message));
       return view(job);

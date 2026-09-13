@@ -124,11 +124,8 @@ test('async jobs return and deduplicate, advance process sequence and persist te
   assert.equal(job.result.output, 'started\nfinished\n');
   const jobFile = path.join(stateRoot, 'jobs', `${job.id}.json`);
   const persisted = JSON.parse(await fs.readFile(jobFile, 'utf8'));
-  // In-memory terminal state can precede atomic disk rename; wait for durable terminal.
-  if (persisted.state !== 'succeeded') {
-    await delay(50);
-    assert.equal(JSON.parse(await fs.readFile(jobFile, 'utf8')).state, 'succeeded');
-  }
+  // A terminal state is observable only after its atomic disk write completes.
+  assert.equal(persisted.state, 'succeeded');
   assert.equal((await call('get_job', { jobId: job.id }, 'bob')).isError, true);
   for (const tool of ['read_process', 'write_stdin', 'terminate_process']) {
     assert.equal((await call(tool, { sessionId: job.result.sessionId }, 'bob')).isError, true);

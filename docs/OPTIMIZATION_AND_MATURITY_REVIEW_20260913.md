@@ -45,7 +45,7 @@ Overall maturity: **7.0/10 controlled-use beta**. Foreground use by one trusted 
 
 4. **Separate the OAuth gateway from the execution worker.** Run the public-facing loopback gateway with no workspace access. Put command execution under a dedicated local or virtual service account and communicate over an ACL-restricted named pipe using a small authenticated request schema. This prevents a command from reading OAuth state merely because gateway and worker currently share an identity.
 
-5. **Add performance budgets and reproducible benchmarks.** Record cold baseline, unchanged checkpoint, one-file delta, 10k/100k-file tree, 1/10 GiB tree, cancellation, and restore timings on SSD and HDD. Gate regressions for p50/p95 latency, bytes read, peak RSS, and temporary disk amplification. The existing 10,001 tiny-file checkpoint test took about 11.7 seconds on the development PC, demonstrating that metadata cost is already material.
+5. **Add performance budgets and reproducible benchmarks.** Record cold baseline, unchanged checkpoint, one-file delta, 10k/100k-file tree, 1/10 GiB tree, cancellation, and restore timings on SSD and HDD. Gate regressions for p50/p95 latency, bytes read, peak RSS, and temporary disk amplification. The existing 10,001 tiny-file checkpoint test took 11.7–19.5 seconds in local runs, demonstrating that metadata cost is already material.
 
 ### P2 — maintainability and product quality
 
@@ -83,6 +83,7 @@ Choose one outcome for each: wire it into an explicit operator command with acce
 - Windows CI run 34758219782 passes from a clean checkout.
 - Local TypeScript build passes; upstream tests report 41 pass and one POSIX-only skip; adapter/native tests report 57 pass.
 - Production dependency audit reports zero known vulnerabilities across 94 production dependencies.
+- The review exposed and fixed a durable-state race: terminal job state is now published in memory only after the atomic state-file write completes. The regression no longer uses a timing delay.
 - Read-only recursive enumeration of the active F workspace did not complete within the audit sampling window. This is observational evidence of a large tree, not a controlled checkpoint benchmark.
 - Administrator service registration, reboot behavior, failure restart, live named-tunnel OAuth, and clean-machine uninstall remain unverified.
 
