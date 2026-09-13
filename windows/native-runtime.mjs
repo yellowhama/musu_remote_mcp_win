@@ -63,7 +63,7 @@ if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error('po
 await fs.mkdir(stateRoot, { recursive: true });
 await fs.mkdir(backupRoot, { recursive: true });
 process.env.MCP_STATE_ROOT = stateRoot;
-await import('../setup-state.mjs');
+await import('../adapter/dist/setup-state.mjs');
 const runtimeFile = path.join(stateRoot, 'runtime.json');
 const temporary = `${runtimeFile}.${process.pid}.tmp`;
 await fs.writeFile(temporary, JSON.stringify({ publicUrl }), { flag: 'wx', mode: 0o600 });
@@ -84,4 +84,4 @@ Object.assign(process.env, {
   MCP_MIN_FREE_BYTES: String(config.retention?.minFreeBytes ?? 10 * 1024 ** 3),
 });
 
-await import('../entrypoint.mjs');
+await import('../adapter/dist/entrypoint.mjs');

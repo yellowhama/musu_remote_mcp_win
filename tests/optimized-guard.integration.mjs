@@ -26,7 +26,7 @@ const base = { registerTool(name, config, callback) {
   captured.set(name, { config, callback });
   return {};
 } };
-const { createGuardedToolRegistrar } = await import('../optimized-guard.mjs');
+const { createGuardedToolRegistrar } = await import('../adapter/dist/optimized-guard.mjs');
 const server = createGuardedToolRegistrar(base);
 const respond = data => ({ content: [{ type: 'text', text: JSON.stringify(data) }], structuredContent: data });
 const extra = clientId => ({ http: { authInfo: { clientId } }, mcpReq: { signal: new AbortController().signal } });

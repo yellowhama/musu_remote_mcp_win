@@ -50,7 +50,7 @@ async function loadLimits(defaults, limitsFile) {
 
 // Metadata-only sizing for an operator before selecting bounded limits. This is
 // not a coherent backup or permission to mutate; the real checkpoint still runs.
-export async function inspectCheckpoint(root, { signal, maxEntries = 250000 } = {}) {
+export async function inspectCheckpoint(root, { signal, maxEntries = 250000 }: { signal?: AbortSignal; maxEntries?: number } = {}) {
   positiveInteger('inventory maxEntries', maxEntries);
   const canonicalRoot = await fs.realpath(root);
   const result = { root, regularFiles: 0, symlinks: 0, totalBytes: 0, largestFileBytes: 0, largestFiles: [], byTopLevel: Object.create(null) };

@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const dir = path.resolve(process.env.MCP_STATE_ROOT || path.join(projectRoot, 'state'));
 await fs.mkdir(dir, { recursive: true });
 for (const name of ['approval-key.txt']) {

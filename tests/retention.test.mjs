@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
-import { planRetention, applyRetention } from '../retention.mjs';
+import { planRetention, applyRetention } from '../adapter/dist/retention.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 

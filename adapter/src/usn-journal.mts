@@ -85,7 +85,7 @@ export function parseUsnRead(output) {
 
 export function createFsutilUsnJournal(roots, platform = process.platform) {
   if (platform !== 'win32') return null;
-  const volumes = new Set(roots.map(root => path.parse(path.resolve(root)).root.toUpperCase()));
+  const volumes = new Set<string>(roots.map(root => path.parse(path.resolve(root)).root.toUpperCase()));
   if (volumes.size !== 1) return null;
   const volumeRoot = [...volumes][0];
   if (!/^[A-Z]:\\$/.test(volumeRoot)) return null;

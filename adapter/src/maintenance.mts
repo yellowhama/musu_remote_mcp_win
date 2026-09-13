@@ -10,7 +10,7 @@ const policy = config.retention || {};
 const policyFields = new Set(['manifestDays', 'jobDays', 'archiveDays', 'logDays', 'minFreeBytes']);
 if (!policy || Array.isArray(policy) || typeof policy !== 'object') throw new Error('retention must be an object');
 for (const key of Object.keys(policy)) if (!policyFields.has(key)) throw new Error(`Unknown retention field: ${key}`);
-const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const plan = await planRetention({
   backupRoot: config.backupRoot,
   jobsRoot: path.join(config.stateRoot, 'jobs'),

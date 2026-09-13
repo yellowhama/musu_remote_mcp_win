@@ -14,7 +14,7 @@ The implementation moved materially during this audit: request Origin validation
 | Security for one trusted operator | **8.8/10** | loopback bind, Host/Origin checks, OAuth audience binding, PKCE, hashed tokens, bounded DCR and rate limits; gateway and command worker still share one identity |
 | Recovery and operations | **8.9/10** | byte-exact objects, manifests, durable jobs, transactional install rollback, dry-run reachable GC, retention, 10 GiB default watermark; clean-VM reboot/upgrade evidence remains |
 | Performance and scalability | **7.8/10** | persistent hash index and NTFS USN deltas reduce unchanged snapshot time by about 67%; safe verification still enumerates and stats the workspace |
-| Architecture and maintainability | **7.4/10** | typed SDK v2 boundary, explicit tool registry, OAuth store split; root adapter remains compressed JavaScript, dependency junction remains, two modules exceed 680 lines |
+| Architecture and maintainability | **8.0/10** | typed SDK v2 boundary, explicit tool registry, OAuth store split, TypeScript adapter workspace, and root lockfile; two modules still exceed 680 lines |
 | Protocol longevity | **8.9/10** | MCP 2026-07-28 is primary and 2025-11-25 remains for compatibility; CIMD migration and real ChatGPT negotiation evidence remain |
 | Observability | **6.0/10** | health and service logs exist; Windows Event Log events, counters, latency histograms, and operator alerts do not |
 
@@ -54,12 +54,11 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 
 ### P1 — maintainability and observability
 
-1. Convert the root `.mjs` adapter/checkpoint layer to TypeScript with explicit interfaces and emitted artifacts.
-2. Make the repository root the npm workspace and remove the `node_modules` junction.
-3. Split `file-service.ts` (695 lines) and `process-manager.ts` (682 lines) by storage, validation, execution, and lifecycle responsibility.
-4. Emit structured Windows Event Log records and metrics for auth rejection, tool latency/error, queue depth, checkpoint bytes/duration/strategy, disk watermark, process cancellation, and retention.
-5. Add Cloudflare WAF examples for `/authorize`, `/register`, `/token`, and `/revoke`; keep server-side limits authoritative.
-6. Add Client ID Metadata Document support, retain DCR during a measured compatibility window, then remove it only after ChatGPT evidence.
+1. Split `file-service.ts` (695 lines) and `process-manager.ts` (682 lines) by storage, validation, execution, and lifecycle responsibility.
+2. Progressively replace inferred adapter types with explicit manifest, job, journal, and tool callback contracts.
+3. Emit structured Windows Event Log records and metrics for auth rejection, tool latency/error, queue depth, checkpoint bytes/duration/strategy, disk watermark, process cancellation, and retention.
+4. Add Cloudflare WAF examples for `/authorize`, `/register`, `/token`, and `/revoke`; keep server-side limits authoritative.
+5. Add Client ID Metadata Document support, retain DCR during a measured compatibility window, then remove it only after ChatGPT evidence.
 
 ### P2 — product finish
 

@@ -2,11 +2,11 @@
 
 ## Runtime
 
-`windows/native-runtime.mjs` loads a strict JSON configuration, validates Windows paths and the OAuth public URL, initializes state, sets the upstream environment, and imports `entrypoint.mjs`. The HTTP server binds only to loopback and validates Host and every present Origin. A separately managed Cloudflare named tunnel provides the fixed HTTPS origin used by ChatGPT and OAuth metadata.
+`windows/native-runtime.mjs` is a small bootstrap that loads a strict JSON configuration, validates Windows paths and the OAuth public URL, initializes state, sets the upstream environment, and imports the compiled TypeScript adapter entrypoint. The HTTP server binds only to loopback and validates Host and every present Origin. A separately managed Cloudflare named tunnel provides the fixed HTTPS origin used by ChatGPT and OAuth metadata.
 
 The TypeScript SDK v2 handler serves MCP 2026-07-28. A separately routed legacy handler retains MCP 2025-11-25 compatibility. Tool registration passes through an explicit typed registry owned by the guard layer; no SDK prototype is modified.
 
-The TypeScript application remains under the `vendor` npm workspace. The repository root owns the lockfile and dependency tree, so the safety adapter and application resolve one reproducible installation without a junction. No global npm packages are required.
+The safety/checkpoint layer lives in the `adapter` TypeScript workspace and emits `.mjs` artifacts to `adapter/dist`; the upstream application lives in the `vendor` TypeScript workspace. The repository root owns the lockfile and dependency tree, so both resolve one reproducible installation without a junction. No global npm packages are required.
 
 ## Service lifecycle
 
@@ -14,7 +14,7 @@ Foreground mode runs through `windows/Start-Local.ps1`. Service mode uses a chec
 
 ## Mutation boundary
 
-`optimized-guard.mjs` intercepts tool registration. Direct mutations resolve against configured roots and receive target-only snapshots. Shell, script, patch, and broad tree mutations must be submitted as durable jobs and receive full-root snapshots before execution.
+The compiled `adapter/dist/optimized-guard.mjs` intercepts tool registration. Direct mutations resolve against configured roots and receive target-only snapshots. Shell, script, patch, and broad tree mutations must be submitted as durable jobs and receive full-root snapshots before execution.
 
 `snapshot-targets.mjs` uses `path.relative` containment so Windows drive letters and case-insensitive paths are handled by the platform path implementation. It rejects traversal, non-canonical roots, symlinks, junctions, and direct hard-linked file mutations. Backup objects are addressed by SHA-256; new objects and manifests are written through a temporary file and rename.
 

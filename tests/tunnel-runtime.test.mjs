@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { selectTunnelUrl, updateRuntime } from '../tunnel-runtime.mjs';
+import { selectTunnelUrl, updateRuntime } from '../adapter/dist/tunnel-runtime.mjs';
 test('stopped tunnel and current startup without URL are rejected', () => {
   assert.throws(() => selectTunnelUrl({ Running: false }, 'https://old.trycloudflare.com'), /not running/);
   assert.throws(() => selectTunnelUrl({ Running: true, StartedAt: new Date().toISOString() }, 'starting'), /No URL/);

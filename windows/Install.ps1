@@ -107,7 +107,7 @@ try {
     $configuration | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $configTemporary -Encoding utf8NoBOM
     Move-Item -LiteralPath $configTemporary -Destination $configFile -Force
     $env:MCP_STATE_ROOT = $StateRoot
-    Invoke-CheckedNative -Executable $node -FailureMessage 'Authentication state initialization failed' -Arguments @((Join-Path $projectRoot 'setup-state.mjs'))
+    Invoke-CheckedNative -Executable $node -FailureMessage 'Authentication state initialization failed' -Arguments @((Join-Path $projectRoot 'adapter\dist\setup-state.mjs'))
 
     $currentIdentity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
     Invoke-CheckedNative -Executable $icacls -FailureMessage 'Failed to protect the state directory ACL' -Arguments @($StateRoot, '/inheritance:r', '/grant:r', "${currentIdentity}:(OI)(CI)F", 'SYSTEM:(OI)(CI)F')

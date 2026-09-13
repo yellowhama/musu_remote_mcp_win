@@ -14,7 +14,7 @@ if ($Apply) {
     $listener = Get-NetTCPConnection -LocalPort $configuration.port -State Listen -ErrorAction SilentlyContinue
     if ($listener) { throw "Port $($configuration.port) is listening. Stop the foreground MCP server before applying retention." }
 }
-$arguments = @((Join-Path $projectRoot 'maintenance.mjs'), $Config)
+$arguments = @((Join-Path $projectRoot 'adapter\dist\maintenance.mjs'), $Config)
 if ($Apply) { $arguments += '--apply' }
 & node @arguments
 if ($LASTEXITCODE -ne 0) { throw "Retention command failed (exit $LASTEXITCODE)" }

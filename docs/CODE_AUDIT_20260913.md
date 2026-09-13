@@ -27,7 +27,7 @@ The unrestricted command tools can read anything available to the service identi
 
 - `oauth.ts` fell from roughly 700 lines to 392 lines after storage extraction.
 - `file-service.ts` (695) and `process-manager.ts` (682) remain the main change-risk concentrations.
-- The root adapter is still compressed JavaScript and the root `node_modules` directory is a junction to `vendor/node_modules`.
+- The former root JavaScript adapter is now an `adapter` TypeScript workspace; the repository uses a real root npm workspace and lockfile without a `node_modules` junction.
 - SDK calls now fail at typed compile boundaries; the previous global monkey patch is gone.
 - Shutdown now stops accepting HTTP connections before closing OAuth state and worker resources.
 
@@ -50,7 +50,7 @@ The USN index changes the dominant unchanged-workspace cost from hashing all fil
 2. Replace `taskkill /T /F` cancellation with Windows Job Objects.
 3. Add Event Log and metrics coverage.
 4. Complete a disposable-VM lifecycle test and a real ChatGPT connector OAuth round trip.
-5. Convert the root adapter to TypeScript, remove the dependency junction, and split the two largest modules.
+5. Split the two largest modules and progressively strengthen the migrated adapter's public TypeScript interfaces.
 
 ## Rating
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { openJobs } from '../jobs.mjs';
+import { openJobs } from '../adapter/dist/jobs.mjs';
 
 function deferred() {
   let resolve;

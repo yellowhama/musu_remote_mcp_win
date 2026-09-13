@@ -10,7 +10,7 @@ function canonical(value) {
 const digest=value=>createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 export async function openJobs(directory,{maxPending=4,maxRecords=2000}={}) {
   await fs.mkdir(directory,{recursive:true});
-  const jobs=new Map(),controllers=new Map();let queue=Promise.resolve(),admission=Promise.resolve();
+  const jobs=new Map(),controllers=new Map();let queue=Promise.resolve(),admission:Promise<unknown>=Promise.resolve();
   const writes=new Map();
   async function save(job){
     const payload=JSON.stringify(job),id=job.id;

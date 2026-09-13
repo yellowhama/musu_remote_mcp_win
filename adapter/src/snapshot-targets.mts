@@ -29,7 +29,7 @@ async function loadHashIndex(backupRoot,roots,maxEntries) {
       parsed.roots.some((root,index)=>!samePath(root,roots[index]))||typeof parsed.journalId!=='string'||
       !/^[0-9a-f]+$/.test(parsed.journalId)||!/^\d+$/.test(parsed.nextUsn)||
       !parsed.items||Array.isArray(parsed.items)||typeof parsed.items!=='object'||Object.keys(parsed.items).length>maxEntries) return null;
-    for(const [name,item] of Object.entries(parsed.items)) {
+    for(const [name,item] of Object.entries(parsed.items) as [string, any][]) {
       if(!roots.some(root=>inside(root,name))||!item||typeof item!=='object'||
         !/^[0-9a-f]{16}$/.test(item.fileId)||!['file','directory','link'].includes(item.kind)) return null;
       if(item.kind==='file'&&(!item.entry||!/^[0-9a-f]{64}$/.test(item.entry.sha256)||!Number.isSafeInteger(item.entry.size))) return null;
@@ -83,12 +83,12 @@ export async function safePath(value, cwd, roots) {
   }
   return file;
 }
-export async function digestFile(file, signal) {
+export async function digestFile(file, signal?: AbortSignal) {
   const h = createHash('sha256');
   const before = await fs.lstat(file);
   if (before.isSymbolicLink()) {
     const error = new Error('Symlink or junction backup object rejected');
-    error.code = 'ELOOP';
+    (error as NodeJS.ErrnoException).code = 'ELOOP';
     throw error;
   }
   const handle = await fs.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
@@ -108,13 +108,13 @@ export function snapshotter({ roots, backupRoot, maxFiles=100000, maxFileBytes=2
   for (const n of [maxFiles,maxFileBytes,maxTotalBytes,workers]) if (!Number.isSafeInteger(n)||n<1) throw new Error('Invalid snapshot limit');
   if (!Number.isSafeInteger(minFreeBytes)||minFreeBytes<0) throw new Error('Invalid minimum free byte limit');
   if (workers>64) throw new Error('Too many workers');
-  return async function snapshot(targets, options={}) {
+  return async function snapshot(targets, options: { signal?: AbortSignal; full?: boolean; tool?: string; progress?: (value: any) => void }={}) {
     try { return await runSnapshot(targets,options,true); }
     catch(e) { if(e.code!=='MUSU_USN_FALLBACK')throw e; return runSnapshot(targets,options,false); }
   };
-  async function runSnapshot(targets, { signal, full=false, tool='file-change', progress=()=>{} }={}, allowIncremental) {
+  async function runSnapshot(targets, { signal, full=false, tool='file-change', progress=()=>{} }: { signal?: AbortSignal; full?: boolean; tool?: string; progress?: (value: any) => void }={}, allowIncremental) {
     const id = `${Date.now()}-${randomUUID()}`;
-    const entries = Object.create(null), versions = new Map(), candidates = [], currentItems=Object.create(null);
+    const entries: Record<string, any> = Object.create(null), versions = new Map(), candidates = [], currentItems: Record<string, any>=Object.create(null);
     let count=0,totalBytes=0,done=0;
     const seen = new Set(), directories=[];
     let journalStart=null,index=null,incremental=null,indexBoundary=null,strategy='full-scan',inventoryChanged=false;
@@ -252,7 +252,7 @@ export function snapshotter({ roots, backupRoot, maxFiles=100000, maxFileBytes=2
     const temp=path.join(backupRoot,'manifests',`${id}.tmp`),dest=path.join(backupRoot,'manifests',`${id}.json`);
     await fs.writeFile(temp,JSON.stringify(manifest),{flag:'wx',mode:0o600});await fs.rename(temp,dest);
     if(full&&indexBoundary){
-      const items=Object.fromEntries(Object.entries(currentItems).filter(([,item])=>item.entry));
+      const items=Object.fromEntries(Object.entries(currentItems).filter(([,item]: [string, any])=>item.entry));
       await saveHashIndex(backupRoot,{version:1,roots,journalId:journalStart.journalId,nextUsn:indexBoundary,items}).catch(()=>{});
     }
     return {id,count,totalBytes,strategy,hashedFiles,reusedFiles,async verify(){
@@ -267,7 +267,7 @@ export async function restoreToNewDirectory(manifest,backupRoot,destination) {
   destination=path.join(await fs.realpath(path.dirname(destination)),path.basename(destination));
   if(manifest.roots.some(r=>inside(r,destination)||inside(destination,r)))throw new Error('Restore must be outside source roots');
   await fs.mkdir(destination,{recursive:false});
-  for(const [original,entry] of Object.entries(manifest.entries)){
+  for(const [original,entry] of Object.entries(manifest.entries) as [string, any][]){
     const root=manifest.roots.find(r=>inside(r,original));if(!root)throw new Error('Invalid manifest path');
     const target=path.resolve(destination,String(manifest.roots.indexOf(root)),path.relative(root,original));
     if(!inside(destination,target))throw new Error('Restore path escaped');

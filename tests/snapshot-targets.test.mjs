@@ -5,7 +5,7 @@ import fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
-import { safePath, snapshotter, restoreToNewDirectory } from '../snapshot-targets.mjs';
+import { safePath, snapshotter, restoreToNewDirectory } from '../adapter/dist/snapshot-targets.mjs';
 
 async function fixture(t, limits = {}) {
   const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'remote-dev-targets-')));

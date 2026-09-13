@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createFsutilUsnJournal, parseUsnQuery, parseUsnRead } from '../usn-journal.mjs';
+import { createFsutilUsnJournal, parseUsnQuery, parseUsnRead } from '../adapter/dist/usn-journal.mjs';
 
 test('USN query parser reads locale-independent ordered numeric fields', () => {
   const parsed = parseUsnQuery([

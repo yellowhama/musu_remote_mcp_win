@@ -1,6 +1,7 @@
 /state/
 /backups/
 /node_modules/
+/adapter/dist/
 **/node_modules/
 *.backup
 **/*.backup

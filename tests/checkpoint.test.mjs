@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { createCheckpoint, createMutationGate } from '../checkpoint.mjs';
+import { createCheckpoint, createMutationGate } from '../adapter/dist/checkpoint.mjs';
 async function fixture(t, options = {}) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'remote-dev-checkpoint-'));
   t.after(() => fs.rm(base, { recursive: true, force: true }));
@@ -194,7 +194,7 @@ test('retained manifests do not consume the next source-file allowance', async t
 });
 
 test('inventory is read-only, preserves candidate coverage and uses the same excluded names', async t => {
-  const module = await import('../checkpoint.mjs');
+  const module = await import('../adapter/dist/checkpoint.mjs');
   assert.equal(typeof module.inspectCheckpoint, 'function', 'read-only inventory must be provided');
   const f = await fixture(t);
   const candidate = path.join(f.root, '.local-build', 'candidate');

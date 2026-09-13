@@ -10,7 +10,7 @@ const inside = (root, value) => {
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 };
 
-async function files(directory, suffix) {
+async function files(directory, suffix = '') {
   try {
     const entries = await fs.readdir(directory, { withFileTypes: true });
     return entries.filter(entry => entry.isFile() && (!suffix || entry.name.endsWith(suffix))).map(entry => path.join(directory, entry.name));
@@ -52,11 +52,11 @@ export async function planRetention({
   const guards = [];
   for (const item of retainedManifests) {
     const bytes = await fs.readFile(item.file);
-    const manifest = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    const manifest: any = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
     if (!manifest || typeof manifest !== 'object' || !manifest.entries || typeof manifest.entries !== 'object') {
       throw new Error(`Invalid retained manifest: ${item.file}`);
     }
-    for (const entry of Object.values(manifest.entries)) {
+    for (const entry of Object.values(manifest.entries) as any[]) {
       if (entry?.sha256 !== undefined) {
         if (typeof entry.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(entry.sha256)) {
           throw new Error(`Invalid object hash in retained manifest: ${item.file}`);
