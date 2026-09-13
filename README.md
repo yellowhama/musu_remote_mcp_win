@@ -114,7 +114,7 @@ The installer creates the ignored file `config\windows.json`. The checked-in exa
 | `port` | Loopback port, default `39391` |
 | `defaultShell` | PowerShell 7 executable; installer records its absolute path |
 
-The native runtime rejects unknown fields, non-absolute paths, missing roots, overlapping roots, comma-containing roots, non-canonical roots, unsafe public URLs, and out-of-range ports before starting.
+The native runtime rejects unknown fields, non-absolute paths, missing roots, overlapping roots, comma-containing roots, unsafe public URLs, and out-of-range ports before starting. It resolves Windows 8.3 aliases and other existing path aliases to canonical paths before applying containment checks.
 
 ## Mutation and recovery model
 

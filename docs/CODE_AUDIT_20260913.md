@@ -20,7 +20,7 @@ Qualitative score: **8.5/10 for a trusted personal development PC; not suitable 
 | High | `child.kill()` could leave Windows grandchildren alive | `taskkill.exe /T /F` plus descendant test | Windows-only process-tree test |
 | High | Windows lacks `O_NOFOLLOW`, allowing a backup object link to be followed | Explicit `lstat` link rejection and open-handle identity comparison | Regression test passes |
 | High | Concurrent identical checkpoint objects collided because Windows rename does not replace an existing target | Verify the winning content-addressed object and remove the losing temporary file | 10,001-file duplicate-content test passes |
-| Medium | String-prefix path checks did not model drive-letter case and Windows separators | `path.relative` containment and canonical-root validation | Windows adapter tests |
+| Medium | String-prefix path checks did not model drive-letter case, Windows separators, or 8.3 aliases | Real-path canonicalization followed by `path.relative` containment | Windows adapter tests and `windows-latest` CI |
 | Medium | Junctions and direct hard-linked files could bypass an edit-path assumption | Junction/symlink traversal and final-file hard-link rejection | Source audit and path regressions |
 | Medium | Git could rewrite LF patches to CRLF under host `core.autocrlf` | Per-command `core.autocrlf=false` for patch application | Unified and three-way patch integration tests |
 | Medium | POSIX mode tests produced false failures on NTFS | Windows ACL contract documented; POSIX-only assertions gated | 41 applicable upstream tests pass |
@@ -72,11 +72,14 @@ Next gate: a disposable Windows VM test with recorded service status, reboot, fa
 - PowerShell parser: install/start/uninstall scripts pass
 - `git diff --check`: pass
 - Secret-pattern review: no generated key, OAuth token, tunnel credential, or private key tracked
+- GitHub `windows-latest` CI: pass ([run 34758123035](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34758123035))
+- GitHub private vulnerability reporting: enabled
 
 ## Release gates
 
-1. GitHub `windows-latest` CI must pass from a clean checkout.
-2. Confirm the repository contains no ignored generated configuration or service binary.
-3. Enable private vulnerability reporting on GitHub.
-4. Run a clean Windows VM service lifecycle test before labeling service mode stable.
-5. Run a live named-tunnel OAuth round trip before publishing a production setup claim.
+Completed release checks: clean-checkout `windows-latest` CI, generated-file review, and private vulnerability reporting.
+
+Remaining release gates:
+
+1. Run a clean Windows VM service lifecycle test before labeling service mode stable.
+2. Run a live named-tunnel OAuth round trip before publishing a production setup claim.
