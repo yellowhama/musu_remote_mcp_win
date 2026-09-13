@@ -205,7 +205,8 @@ describe.sequential("all registered MCP tools", () => {
     });
     expect(completed).toMatchObject({ completed: true, exitCode: 7, stderr: "stderr-ok" });
     expect(String(completed.stdout)).toContain("env-ok");
-    expect(String(completed.stdout)).toContain(testRoot);
+    // Windows runners can report the same temp directory through an 8.3 alias.
+    expect(String(completed.stdout)).toContain(path.basename(testRoot));
     expect(await callOk("exec_command", {
       cmd: isWindows ? "[Console]::Out.Write('shell-ok')" : "printf shell-ok",
       workdir: testRoot,
