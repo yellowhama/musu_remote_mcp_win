@@ -12,6 +12,7 @@ interface TelemetryEvent {
   durationMs?: unknown;
   totalBytes?: unknown;
   pending?: unknown;
+  method?: unknown;
 }
 
 function labels(values: Record<string, string>): string {
@@ -33,6 +34,7 @@ export class MetricsRegistry {
   private checkpointBytes = 0;
   private checkpointDurationSeconds = 0;
   private mutationQueuePending = 0;
+  private readonly oauthClientResolutions = new Map<string, number>();
 
   constructor() {
     this.telemetryChannel.subscribe(this.telemetryListener);
@@ -70,6 +72,13 @@ export class MetricsRegistry {
       }
     } else if (event.type === "mutation_queue" && typeof event.pending === "number") {
       this.mutationQueuePending = Math.max(0, Math.floor(event.pending));
+    } else if (
+      event.type === "oauth_client_resolution" &&
+      (event.method === "cimd" || event.method === "dcr") &&
+      (event.outcome === "success" || event.outcome === "failure")
+    ) {
+      const key = `${event.method}|${event.outcome}`;
+      this.oauthClientResolutions.set(key, (this.oauthClientResolutions.get(key) ?? 0) + 1);
     }
   }
 
@@ -95,6 +104,12 @@ export class MetricsRegistry {
     lines.push("# HELP musu_auth_rejections_total Authentication boundary rejections.", "# TYPE musu_auth_rejections_total counter");
     for (const reason of ["bearer", "host", "origin"] as const) {
       lines.push(`musu_auth_rejections_total${labels({ reason })} ${this.authRejections.get(reason) ?? 0}`);
+    }
+    lines.push("# HELP musu_oauth_client_resolution_total OAuth client discovery outcomes for compatibility measurement.", "# TYPE musu_oauth_client_resolution_total counter");
+    for (const method of ["cimd", "dcr"] as const) {
+      for (const outcome of ["success", "failure"] as const) {
+        lines.push(`musu_oauth_client_resolution_total${labels({ method, outcome })} ${this.oauthClientResolutions.get(`${method}|${outcome}`) ?? 0}`);
+      }
     }
     const processes = services.processManager.list();
     lines.push("# HELP musu_managed_processes Managed process sessions.", "# TYPE musu_managed_processes gauge");

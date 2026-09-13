@@ -21,6 +21,7 @@ describe("bounded operational metrics", () => {
         type: "checkpoint", outcome: "success", durationMs: 250, totalBytes: 4096,
       });
       channel("musu.remote-mcp.telemetry").publish({ type: "mutation_queue", pending: 3 });
+      channel("musu.remote-mcp.telemetry").publish({ type: "oauth_client_resolution", method: "cimd", outcome: "success" });
       const config = loadConfig({ MCP_ALLOW_NO_AUTH: "true", MCP_DEFAULT_CWD: process.cwd() });
       const body = await metrics.render(config, {
         fileService: {} as never,
@@ -33,6 +34,7 @@ describe("bounded operational metrics", () => {
       expect(body).toContain('musu_managed_processes{state="running"} 1');
       expect(body).toContain("musu_mutation_queue_pending 3");
       expect(body).toContain('musu_checkpoints_total{outcome="success"} 1');
+      expect(body).toContain('musu_oauth_client_resolution_total{method="cimd",outcome="success"} 1');
       expect(body).toContain("musu_checkpoint_bytes_total 4096");
       expect(body).toContain("musu_workspace_disk_free_bytes");
     } finally {

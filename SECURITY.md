@@ -4,9 +4,9 @@
 
 Musu Remote MCP for Windows is for one trusted operator on a development workstation. OAuth authenticates remote clients, editable roots constrain direct mutation tools, and checkpoints improve recovery. These controls do not turn unrestricted shell execution into a sandbox.
 
-Every command receives the Windows service account's filesystem, process, registry, and network permissions. Native mode has no Docker mount namespace, capability drop, PID limit, memory limit, or container-only toolchain. The default Windows service identity is `LocalService`; it is lower privilege than `LocalSystem`, but it is shared by other Windows services.
+Every command receives the execution worker account's filesystem, process, registry, and network permissions. Native mode has no Docker mount namespace, capability drop, memory limit, or container-only toolchain. Windows Job Objects contain command process trees but do not restrict filesystem or network access.
 
-The OAuth gateway and command worker run in one process and identity. An authenticated shell can read state and backup data accessible to that identity. Do not connect untrusted users or autonomous agents whose output you cannot supervise.
+Recommended service mode runs OAuth and command execution in separate virtual service accounts. Explicit deny ACLs prevent the gateway from opening editable roots/backups and prevent the worker from opening OAuth state. Authenticated loopback requests bind client identity, timestamp, nonce, and JSON body with HMAC. Foreground compatibility mode still uses one interactive identity. Do not connect untrusted users or autonomous agents whose output you cannot supervise.
 
 ## Required deployment controls
 
@@ -24,8 +24,8 @@ The OAuth gateway and command worker run in one process and identity. An authent
 - Node.js does not expose `O_NOFOLLOW` on Windows. The adapter rejects symlinks and junctions and compares file identity around backup reads, but a local concurrent attacker can still create filesystem races.
 - NTFS hard links are rejected for direct mutation paths. Unrestricted shell jobs can still operate on them.
 - `chmod` cannot reproduce POSIX permission semantics on Windows. Restore verifies bytes but does not restore full ACLs, ownership, alternate data streams, or every file attribute.
-- Process cancellation uses `taskkill.exe /T /F` to terminate a command tree. Processes that escape the tree or run through another service boundary may survive.
-- `LocalService` is shared. Use a dedicated Windows account and custom service configuration when isolation from other local services is required.
+- Process cancellation closes a kill-on-close Job Object. Processes deliberately launched through another service, scheduled task, or privileged broker can cross that boundary.
+- Local administrators can override NTFS ACLs and inspect both service processes. The split is a least-privilege service boundary, not protection from a compromised administrator.
 
 ## Reporting
 

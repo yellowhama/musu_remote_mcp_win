@@ -77,7 +77,7 @@ The Docker edition could not be advertised as native Windows without changes:
 | Mode | Status | Intended use | Isolation |
 |---|---|---|---|
 | Windows foreground, Node 24 + PowerShell 7 | Supported | Setup and diagnostics | Current interactive user permissions |
-| Windows WinSW + named Cloudflare tunnel | Beta pending clean-VM lifecycle proof | Persistent personal workstation | LocalService plus NTFS ACLs |
+| Windows split WinSW + named Cloudflare tunnel | Beta with clean-VM CI gate | Persistent personal workstation | Separate gateway/worker virtual accounts plus deny ACLs |
 | Linux systemd + named tunnel | Feasible next target | VPS or dedicated Linux host | Dedicated user plus systemd hardening |
 | WSL2 + systemd | Compatibility option | Users needing POSIX tools | WSL VM boundary, Windows mounts remain sensitive |
 | Cloudflare Quick Tunnel | Development only | Short-lived tests | Random URL; no availability guarantee |
@@ -85,8 +85,8 @@ The Docker edition could not be advertised as native Windows without changes:
 
 ## Accepted limitations for v1
 
-1. The gateway and execution worker share one Windows identity.
-2. Service mode uses the shared `LocalService` identity. A dedicated managed account is preferable where other local services are not trusted.
+1. Foreground compatibility mode uses the current interactive identity; recommended service mode separates gateway and worker virtual accounts.
+2. The internal boundary uses authenticated loopback HTTP; a named-pipe transport with an explicit pipe ACL remains a possible further reduction in local attack surface.
 3. Every managed command tree is assigned to a kill-on-close Windows Job Object.
 4. Backup restore verifies content bytes but does not restore NTFS ACLs, ownership, alternate data streams, symlinks, junctions, or every file attribute.
 5. File-system race resistance is weaker than Linux because Node does not expose `O_NOFOLLOW` on Windows.

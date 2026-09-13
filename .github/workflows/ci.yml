@@ -32,3 +32,23 @@ jobs:
       - name: Test Windows adapter and native entrypoint
         shell: pwsh
         run: npm run test:adapter
+      - name: Prove split-service install, restart, rollback, and uninstall on clean VM
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP 'musu-workspace'
+          $state = Join-Path $env:RUNNER_TEMP 'musu-gateway-state'
+          $backup = Join-Path $env:RUNNER_TEMP 'musu-backups'
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          pwsh -File windows/Install-SplitService.ps1 -EditableRoot $work -PublicUrl 'http://127.0.0.1:39391' -StateRoot $state -BackupRoot $backup -MinFreeBytes 0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $gatewayDeny = (Get-Acl $work).Access | Where-Object { $_.IdentityReference -like '*MusuRemoteMcpGateway' -and $_.AccessControlType -eq 'Deny' }
+          $workerStateDeny = (Get-Acl $state).Access | Where-Object { $_.IdentityReference -like '*MusuRemoteMcpWorker' -and $_.AccessControlType -eq 'Deny' }
+          if (-not $gatewayDeny -or -not $workerStateDeny) { throw 'Identity separation ACLs were not installed' }
+          Restart-Service MusuRemoteMcpWorker
+          Restart-Service MusuRemoteMcpGateway
+          if ((Invoke-RestMethod 'http://127.0.0.1:39391/health').status -ne 'ok') { throw 'Gateway health failed after restart' }
+          pwsh -File windows/Install-SplitService.ps1 -EditableRoot $work -PublicUrl 'http://127.0.0.1:39391' -StateRoot $state -BackupRoot $backup -MinFreeBytes 0 -TestFailAfterRefresh
+          if ($LASTEXITCODE -eq 0) { throw 'Injected upgrade failure unexpectedly succeeded' }
+          if ((Invoke-RestMethod 'http://127.0.0.1:39391/health').status -ne 'ok') { throw 'Gateway health failed after rollback' }
+          pwsh -File windows/Uninstall-SplitService.ps1
+          if (Get-Service MusuRemoteMcpGateway,MusuRemoteMcpWorker -ErrorAction SilentlyContinue) { throw 'Split services remain after uninstall' }

@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Server as HttpServer } from "node:http";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { createOAuthMetadata, mcpAuthRouter } from "@modelcontextprotocol/server-legacy/auth";
 import type { AuthRouterOptions } from "@modelcontextprotocol/server-legacy/auth";
 import { createMcpHandler, isLegacyRequest } from "@modelcontextprotocol/server";
@@ -13,6 +15,7 @@ import express, { type Request, type Response } from "express";
 import { createBearerAuth, createHostValidation, createOriginValidation } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { errorMessage } from "./errors.js";
+import { createInternalHeaders } from "./internal-auth.js";
 import { createMcpServer, type McpServices } from "./mcp-server.js";
 import { metricRoute, MetricsRegistry } from "./metrics.js";
 import { OAUTH_SCOPES, RemoteDevOAuthProvider } from "./oauth.js";
@@ -180,7 +183,15 @@ export async function startHttpServer(
     });
   });
   app.get("/metrics", authenticate, (_request, response) => {
-    void metrics.render(config, services).then((body) => {
+    void metrics.render(config, services).then(async (body) => {
+      if (config.gatewayWorkerUrl && config.internalAuthKey) {
+        const workerMetrics = await fetch(`${config.gatewayWorkerUrl}/metrics`, {
+          headers: { authorization: `Bearer ${config.internalAuthKey}` },
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (!workerMetrics.ok) throw new Error(`Worker metrics returned HTTP ${workerMetrics.status}`);
+        body += (await workerMetrics.text()).replaceAll("musu_", "musu_worker_");
+      }
       response.type("text/plain; version=0.0.4; charset=utf-8").send(body);
     }).catch((error) => {
       console.error("Metrics collection failed:", errorMessage(error));
@@ -226,6 +237,41 @@ export async function startHttpServer(
   const postHandler = async (request: Request, response: Response): Promise<void> => {
     activeMcpRequests += 1;
     try {
+      if (config.gatewayWorkerUrl && config.internalAuthKey) {
+        const auth = (request as Request & { auth?: { clientId?: string } }).auth;
+        if (!auth?.clientId) {
+          rpcError(response, 401, "Authenticated client identity is missing");
+          return;
+        }
+        const upstream = await fetch(`${config.gatewayWorkerUrl}${config.endpoint}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${config.internalAuthKey}`,
+            "content-type": "application/json",
+            accept: request.header("accept") ?? "application/json",
+            ...(request.header("mcp-protocol-version")
+              ? { "mcp-protocol-version": request.header("mcp-protocol-version")! }
+              : {}),
+            ...createInternalHeaders(config.internalAuthKey, auth.clientId, request.body),
+          },
+          body: JSON.stringify(request.body),
+          signal: AbortSignal.timeout(120_000),
+        });
+        response.status(upstream.status);
+        const contentType = upstream.headers.get("content-type");
+        if (contentType) response.set("content-type", contentType);
+        const cacheControl = upstream.headers.get("cache-control");
+        if (cacheControl) response.set("cache-control", cacheControl);
+        if (!upstream.body) {
+          response.end();
+          return;
+        }
+        await pipeline(
+          Readable.fromWeb(upstream.body as Parameters<typeof Readable.fromWeb>[0]),
+          response,
+        );
+        return;
+      }
       const webRequest = await toWebRequest(request, request.body);
       if (await isLegacyRequest(webRequest, request.body)) {
         await handleLegacyRequest(request, response);
@@ -246,11 +292,13 @@ export async function startHttpServer(
     response.set("Allow", "POST");
     rpcError(response, 405, "Stateless MCP accepts POST requests only");
   };
+  const mcpMiddleware = config.internalAuthKey && !config.gatewayWorkerUrl
+    ? [parseMcpJson, authenticate]
+    : [authenticate, parseMcpJson];
 
   app.post(
     config.endpoint,
-    authenticate,
-    parseMcpJson,
+    ...mcpMiddleware,
     (request, response) => {
       void postHandler(request, response);
     },

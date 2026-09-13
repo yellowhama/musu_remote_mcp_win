@@ -1,4 +1,5 @@
 import { lookup } from "node:dns/promises";
+import { channel } from "node:diagnostics_channel";
 import { request } from "node:https";
 import { BlockList, isIP } from "node:net";
 
@@ -12,6 +13,7 @@ type MetadataResolver = (clientId: string) => Promise<OAuthClientInformationFull
 const CIMD_TIMEOUT_MS = 5_000;
 const CIMD_MAX_RESPONSE_BYTES = 64 * 1024;
 const CIMD_CACHE_TTL_MS = 10 * 60 * 1_000;
+const telemetry = channel("musu.remote-mcp.telemetry");
 
 interface CachedClient {
   client: OAuthClientInformationFull;
@@ -176,19 +178,37 @@ export class CimdOAuthStore extends PersistentOAuthStore {
     return resolution;
   }
 
+  override async registerClient(
+    client: Omit<OAuthClientInformationFull, "client_id" | "client_id_issued_at">,
+  ): Promise<OAuthClientInformationFull> {
+    const registered = await super.registerClient(client);
+    telemetry.publish({ type: "oauth_client_resolution", method: "dcr", outcome: "success" });
+    return registered;
+  }
+
   private async resolveAndValidate(clientId: string): Promise<OAuthClientInformationFull | undefined> {
-    const client = await this.resolveMetadata(clientId);
+    let client: OAuthClientInformationFull | undefined;
+    try {
+      client = await this.resolveMetadata(clientId);
+    } catch {
+      telemetry.publish({ type: "oauth_client_resolution", method: "cimd", outcome: "failure" });
+      return undefined;
+    }
     if (
       !client || client.client_id !== clientId ||
       client.token_endpoint_auth_method !== "none" ||
       "client_secret" in client || this.cimdClientProblem(client)
-    ) return undefined;
+    ) {
+      telemetry.publish({ type: "oauth_client_resolution", method: "cimd", outcome: "failure" });
+      return undefined;
+    }
     while (this.cache.size >= this.maxCimdClients) {
       const oldest = this.cache.keys().next().value as string | undefined;
       if (!oldest) break;
       this.cache.delete(oldest);
     }
     this.cache.set(clientId, { client, expiresAt: Date.now() + CIMD_CACHE_TTL_MS });
+    telemetry.publish({ type: "oauth_client_resolution", method: "cimd", outcome: "success" });
     return client;
   }
 }

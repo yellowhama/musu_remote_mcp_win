@@ -2,7 +2,7 @@
 
 ## Runtime
 
-`windows/native-runtime.mjs` is a small bootstrap that loads a strict JSON configuration, validates Windows paths and the OAuth public URL, initializes state, sets the upstream environment, and imports the compiled TypeScript adapter entrypoint. The HTTP server binds only to loopback and validates Host and every present Origin. A separately managed Cloudflare named tunnel provides the fixed HTTPS origin used by ChatGPT and OAuth metadata.
+`windows/native-runtime.mjs` validates strict configuration and starts a combined foreground process, an OAuth gateway, or an execution worker. Service mode runs gateway and worker separately. Both bind only to loopback; the Cloudflare tunnel reaches the gateway port only.
 
 The TypeScript SDK v2 handler serves MCP 2026-07-28. A separately routed legacy handler retains MCP 2025-11-25 compatibility. Tool registration passes through an explicit typed registry owned by the guard layer; no SDK prototype is modified.
 
@@ -12,7 +12,7 @@ File encoding/chunk validation lives in `file-content.ts`, while process UTF-8 s
 
 ## Service lifecycle
 
-Foreground mode runs through `windows/Start-Local.ps1`. Service mode uses a checksum-pinned WinSW executable and an XML definition containing absolute executable and configuration paths, delayed automatic start, rolling logs, restart on failure, and a 15-second stop timeout. Secrets are read from `stateRoot` and never placed in service arguments or XML.
+Foreground mode runs through `windows/Start-Local.ps1`. Recommended service mode uses two checksum-pinned WinSW instances. The gateway runs as `NT SERVICE\MusuRemoteMcpGateway`; the worker runs as `NT SERVICE\MusuRemoteMcpWorker`. The gateway owns OAuth state, the worker owns job/checkpoint/workspace access, and both receive read-only access to a separate broker key. Service arguments and XML contain no secret values.
 
 ## Mutation boundary
 
@@ -34,6 +34,6 @@ Node's Windows signal emulation does not manage descendants. Every Windows comma
 
 ## Trust model
 
-The network boundary is OAuth plus the HTTPS tunnel. The filesystem boundary is the Windows service account and NTFS ACLs. The adapter's editable-root checks are recovery and accident controls; unrestricted shell tools intentionally retain all permissions of the service identity.
+The gateway terminates OAuth and sends each MCP JSON request to the loopback worker with an HMAC-SHA-256 assertion bound to the authenticated client ID, a 30-second timestamp window, a one-use 192-bit nonce, and the exact JSON body hash. The worker rejects unsigned, altered, stale, and replayed requests before MCP dispatch. Explicit deny ACLs keep the gateway out of workspaces/backups and the worker out of gateway OAuth state. The adapter's editable-root checks remain recovery and accident controls; shell tools retain the worker identity's permissions.
 
 The authenticated `/metrics` endpoint uses fixed route, status, state, and outcome labels. Adapter telemetry crosses the workspace boundary through Node diagnostics channels, covering mutation queue and checkpoint results without coupling the safety adapter to the HTTP server. Service lifecycle and fatal startup/shutdown failures are also written to the Windows Application Event Log under `MusuRemoteMcp`.

@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import type { RequestHandler } from "express";
 import type { OAuthTokenVerifier } from "@modelcontextprotocol/server-legacy/auth";
 import type { AppConfig } from "./config.js";
+import { InternalRequestVerifier } from "./internal-auth.js";
 
 export function tokensEqual(actual: string, expected: string): boolean {
   const actualBuffer = Buffer.from(actual);
@@ -24,6 +25,9 @@ export function createBearerAuth(
   oauthVerifier?: OAuthTokenVerifier,
   onReject?: (reason: "bearer") => void,
 ): RequestHandler {
+  const internalVerifier = config.internalAuthKey && !config.gatewayWorkerUrl
+    ? new InternalRequestVerifier(config.internalAuthKey)
+    : undefined;
   return async (request, response, next) => {
     if (config.allowNoAuth && !config.authToken && !oauthVerifier) {
       next();
@@ -34,6 +38,19 @@ export function createBearerAuth(
     const match = authorization?.match(/^Bearer\s+(.+)$/i);
     const suppliedToken = match?.[1];
     if (suppliedToken && config.authToken && tokensEqual(suppliedToken, config.authToken)) {
+      if (internalVerifier && request.path === config.endpoint) {
+        const authInfo = internalVerifier.verify(request.headers, request.body);
+        if (!authInfo) {
+          onReject?.("bearer");
+          response.status(401).json({
+            jsonrpc: "2.0",
+            error: { code: -32001, message: "Invalid internal gateway assertion" },
+            id: null,
+          });
+          return;
+        }
+        Object.assign(request, { auth: authInfo });
+      }
       next();
       return;
     }

@@ -120,4 +120,25 @@ describe("loadConfig", () => {
       ),
     ).toThrow("must be origins");
   });
+
+  it("accepts only a loopback worker with a strong shared key", () => {
+    const config = loadConfig({
+      MCP_AUTH_TOKEN: "worker-token",
+      MCP_GATEWAY_WORKER_URL: "http://127.0.0.1:39392",
+      MCP_INTERNAL_AUTH_KEY: "k".repeat(64),
+    }, "/tmp");
+    expect(config).toMatchObject({
+      gatewayWorkerUrl: "http://127.0.0.1:39392",
+      internalAuthKey: "k".repeat(64),
+    });
+    expect(() => loadConfig({
+      MCP_AUTH_TOKEN: "worker-token",
+      MCP_GATEWAY_WORKER_URL: "https://worker.example.com",
+      MCP_INTERNAL_AUTH_KEY: "k".repeat(64),
+    }, "/tmp")).toThrow("loopback HTTP");
+    expect(() => loadConfig({
+      MCP_AUTH_TOKEN: "worker-token",
+      MCP_INTERNAL_AUTH_KEY: "short",
+    }, "/tmp")).toThrow("at least 32 characters");
+  });
 });

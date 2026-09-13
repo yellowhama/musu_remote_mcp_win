@@ -21,7 +21,7 @@ This repository is the Windows edition of [remote_dev_mcp](https://github.com/ye
 
 This server intentionally executes arbitrary commands. In native mode, those commands receive every permission of the Windows account running the MCP service. Docker mount and capability isolation are absent. Configure only the directories that the service account may edit, grant that account the minimum NTFS access it needs, and connect only trusted MCP clients.
 
-The OAuth gateway, execution worker, state, and backups share one service identity. An authenticated shell job can therefore read anything that identity can read, including MCP state. This is suitable for one trusted operator on a personal development PC. It is not a hostile-code sandbox or multi-tenant boundary. Read [SECURITY.md](SECURITY.md).
+The recommended service installation separates the OAuth gateway and execution worker into `NT SERVICE\MusuRemoteMcpGateway` and `NT SERVICE\MusuRemoteMcpWorker`. Explicit deny ACLs keep the gateway out of editable roots/backups and the worker out of OAuth state. Requests cross loopback with a short-lived HMAC assertion bound to client ID, nonce, timestamp, and body. The worker still executes arbitrary code with all rights granted to its dedicated identity, so this remains a trusted single-operator system rather than a hostile-code sandbox. Read [SECURITY.md](SECURITY.md).
 
 ## Requirements
 
@@ -33,6 +33,14 @@ The OAuth gateway, execution worker, state, and backups share one service identi
 - A fixed HTTPS URL for ChatGPT; Cloudflare named tunnel is the documented path
 
 Docker Desktop is not required.
+
+## Documentation index
+
+- [Windows architecture](docs/ARCHITECTURE.md)
+- [Operations and incident response](docs/OPERATIONS.md)
+- [Code audit](docs/CODE_AUDIT_20260913.md)
+- [Optimization and maturity review](docs/OPTIMIZATION_AND_MATURITY_REVIEW_20260913.md)
+- [Windows acceptance evidence](docs/WINDOWS_ACCEPTANCE_20260914.md)
 
 ## Install and run in the foreground
 
@@ -60,15 +68,14 @@ F:\musu-remote-mcp-data\state\approval-key.txt
 
 ## Install as a Windows service (beta)
 
-Open PowerShell 7 as Administrator and add `-Service`:
+Open PowerShell 7 as Administrator and run the split-service installer:
 
 ```powershell
-pwsh -File .\windows\Install.ps1 `
+pwsh -File .\windows\Install-SplitService.ps1 `
   -EditableRoot 'F:\workspace\musu-bee','F:\workspace\llm-wiki' `
   -PublicUrl 'https://mcp.example.com' `
   -StateRoot 'F:\musu-remote-mcp-data\state' `
-  -BackupRoot 'F:\musu-remote-mcp-data\backups' `
-  -Service
+  -BackupRoot 'F:\musu-remote-mcp-data\backups'
 ```
 
 Service mode downloads WinSW 2.12.0 and verifies this pinned SHA-256 before use:
@@ -77,12 +84,12 @@ Service mode downloads WinSW 2.12.0 and verifies this pinned SHA-256 before use:
 05B82D46AD331CC16BDC00DE5C6332C1EF818DF8CEEFCD49C726553209B3A0DA
 ```
 
-The service runs as `NT AUTHORITY\LocalService`. The installer grants that shared low-privilege identity read/execute access to the application and modify access to the configured editable, state, and backup roots. Review this choice if another local service should not share those directories.
+The gateway alone can read the approval key and OAuth SQLite state. The worker alone can modify editable roots, checkpoints, and durable job state. Both can read a separate broker key directory; neither receives the other service's data permissions. The older `Install.ps1 -Service` combined mode remains for migration only.
 
 To remove only the service registration while retaining source, state, and backups:
 
 ```powershell
-pwsh -File .\windows\Uninstall-Service.ps1
+pwsh -File .\windows\Uninstall-SplitService.ps1
 ```
 
 ## Cloudflare named tunnel
@@ -102,7 +109,7 @@ Quick Tunnels are intended only for testing. Their hostname changes when restart
 
 The authorization-server metadata advertises Client ID Metadata Document (CIMD) support while retaining Dynamic Client Registration (DCR) for existing ChatGPT clients. CIMD documents must use a canonical HTTPS URL and a public network destination; the server pins the resolved address, rejects redirects, and bounds retrieval time and size.
 
-Authenticated operators can scrape `/metrics` with the same bearer/OAuth credentials used for MCP. The fixed-cardinality metrics cover HTTP status and latency, authentication rejection, managed processes, mutation queue depth, checkpoint outcomes/bytes/duration, and workspace free space.
+Authenticated operators can scrape `/metrics` with the same bearer/OAuth credentials used for MCP. The fixed-cardinality metrics cover HTTP status and latency, authentication rejection, CIMD-versus-DCR resolution, managed processes, mutation queue depth, checkpoint outcomes/bytes/duration, and workspace free space.
 5. Scan tools and confirm that 23 tools are present.
 6. Start with a read-only request for the repository instruction file.
 
@@ -115,9 +122,12 @@ The installer creates the ignored file `config\windows.json`. The checked-in exa
 | `publicUrl` | Fixed HTTPS origin used by OAuth metadata |
 | `editableRoots` | Unique, non-overlapping absolute Windows paths |
 | `defaultCwd` | Default working directory inside an editable root |
-| `stateRoot` | OAuth state, job state, runtime metadata, and approval key |
+| `stateRoot` | Gateway OAuth state and approval key |
+| `workerStateRoot` | Worker durable job state; defaults to `stateRoot-worker` |
+| `brokerRoot` | HMAC broker key readable by both services; defaults to `stateRoot-broker` |
 | `backupRoot` | Content-addressed backup objects and manifests |
 | `port` | Loopback port, default `39391` |
+| `workerPort` | Worker-only loopback port, default `port + 1` |
 | `defaultShell` | PowerShell 7 executable; installer records its absolute path |
 
 The native runtime rejects unknown fields, non-absolute paths, missing roots, overlapping roots, comma-containing roots, unsafe public URLs, and out-of-range ports before starting. It resolves Windows 8.3 aliases and other existing path aliases to canonical paths before applying containment checks.

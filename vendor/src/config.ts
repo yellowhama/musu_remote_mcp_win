@@ -27,6 +27,8 @@ export interface AppConfig {
   processRetentionMs: number;
   maxProcesses: number;
   windowsJobRunner: string | undefined;
+  gatewayWorkerUrl: string | undefined;
+  internalAuthKey: string | undefined;
   maxFileChunkBytes: number;
   maxEditFileBytes: number;
 }
@@ -158,6 +160,17 @@ export function loadConfig(
         "MCP_OAUTH_RESOURCE",
       )
     : undefined;
+  const gatewayWorkerUrl = env.MCP_GATEWAY_WORKER_URL?.trim().replace(/\/+$/, "") || undefined;
+  if (gatewayWorkerUrl) {
+    const worker = new URL(gatewayWorkerUrl);
+    if (worker.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(worker.hostname)) {
+      throw new Error("MCP_GATEWAY_WORKER_URL must use loopback HTTP");
+    }
+  }
+  const internalAuthKey = env.MCP_INTERNAL_AUTH_KEY?.trim() || undefined;
+  if ((gatewayWorkerUrl || internalAuthKey) && (!internalAuthKey || internalAuthKey.length < 32)) {
+    throw new Error("MCP_INTERNAL_AUTH_KEY must contain at least 32 characters for split mode");
+  }
 
   return {
     host: env.MCP_HOST?.trim() || "0.0.0.0",
@@ -242,6 +255,8 @@ export function loadConfig(
     windowsJobRunner: env.MCP_WINDOWS_JOB_RUNNER?.trim()
       ? path.resolve(env.MCP_WINDOWS_JOB_RUNNER.trim())
       : undefined,
+    gatewayWorkerUrl,
+    internalAuthKey,
     maxFileChunkBytes: parseInteger(
       env.MCP_MAX_FILE_CHUNK_BYTES,
       1024 * 1024,

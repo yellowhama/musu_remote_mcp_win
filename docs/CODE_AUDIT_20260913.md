@@ -2,7 +2,7 @@
 
 ## Verdict
 
-No critical correctness defect was found in the current foreground runtime. The audited build is appropriate for one trusted operator under supervision. It is not ready for untrusted callers because the HTTP gateway and arbitrary-command worker still share a Windows identity.
+No critical correctness defect was found in the current foreground or split-process runtime. The audited build is appropriate for one trusted operator under supervision. The recommended service layout separates OAuth and arbitrary-command identities, while the worker itself remains an intentionally unrestricted trusted-code executor.
 
 ## Findings closed in this audit
 
@@ -22,7 +22,7 @@ No critical correctness defect was found in the current foreground runtime. The 
 
 The server binds to loopback and expects a controlled HTTPS tunnel. Host and Origin are validated. OAuth uses PKCE, resource/audience binding, refresh rotation, grant revocation on replay, bounded registration, and hashed token identifiers. State and key ACLs remain part of the trust boundary.
 
-The unrestricted command tools can read anything available to the service identity. A compromised authenticated session can therefore reach OAuth state, backups, and unrelated files granted to that identity. The required architectural fix is a low-privilege gateway plus an execution worker under a separate identity.
+The recommended Windows service mode now separates OAuth and execution identities. The gateway has explicit deny ACLs on editable roots and backups; the worker has an explicit deny ACL on OAuth state. Loopback messages carry body-bound, replay-resistant HMAC assertions. Residual exposure is the worker account's deliberately broad command access and local administrator override.
 
 ## Code health
 

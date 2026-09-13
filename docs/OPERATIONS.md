@@ -63,4 +63,6 @@ OAuth state is SQLite WAL. Stop the server before offline copying, and preserve 
 
 ## Metrics and Windows events
 
-Scrape `https://your-host.example/metrics` with a valid bearer or OAuth access token. Alert on sustained authentication rejection, non-2xx MCP responses, checkpoint failures, queue saturation, declining free space, and retained process growth. Service mode registers the `MusuRemoteMcp` source in the Windows Application log; event IDs 900–903 cover start, normal stop, shutdown failure, and startup failure.
+Scrape `https://your-host.example/metrics` with a valid bearer or OAuth access token. Alert on sustained authentication rejection, non-2xx MCP responses, checkpoint failures, queue saturation, declining free space, and retained process growth. Split service mode registers `MusuRemoteMcpGateway` and `MusuRemoteMcpWorker` in the Windows Application log; event IDs 900–903 cover start, normal stop, shutdown failure, and startup failure.
+
+Use `musu_oauth_client_resolution_total{method="cimd"|"dcr",outcome="success"|"failure"}` to measure ChatGPT registration compatibility. Preserve a dated counter snapshot at the start and end of the compatibility window before considering DCR removal.

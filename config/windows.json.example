@@ -7,8 +7,11 @@
   ],
   "defaultCwd": "F:\\workspace\\musu-bee",
   "stateRoot": "F:\\musu-remote-mcp-data\\state",
+  "workerStateRoot": "F:\\musu-remote-mcp-data\\worker-state",
+  "brokerRoot": "F:\\musu-remote-mcp-data\\broker",
   "backupRoot": "F:\\musu-remote-mcp-data\\backups",
   "port": 39391,
+  "workerPort": 39392,
   "defaultShell": "pwsh.exe",
   "retention": {
     "manifestDays": 30,

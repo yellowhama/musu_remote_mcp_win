@@ -11,14 +11,14 @@ The implementation moved materially during this audit: request Origin validation
 | Dimension | Score | Evidence and limit |
 | --- | ---: | --- |
 | Functional completeness | **9.2/10** | 23 tools, jobs, checkpoints, OAuth, modern and legacy MCP, native service scripts; live ChatGPT connector acceptance is still manual |
-| Security for one trusted operator | **8.8/10** | loopback bind, Host/Origin checks, OAuth audience binding, PKCE, hashed tokens, bounded DCR and rate limits; gateway and command worker still share one identity |
+| Security for one trusted operator | **9.3/10** | separate gateway/worker virtual accounts, deny ACLs, body-bound replay-resistant internal HMAC, OAuth audience binding and PKCE; worker remains an unrestricted trusted-code executor |
 | Recovery and operations | **8.9/10** | byte-exact objects, manifests, durable jobs, transactional install rollback, dry-run reachable GC, retention, 10 GiB default watermark; clean-VM reboot/upgrade evidence remains |
 | Performance and scalability | **7.8/10** | persistent hash index and NTFS USN deltas reduce unchanged snapshot time by about 67%; safe verification still enumerates and stats the workspace |
 | Architecture and maintainability | **8.6/10** | typed SDK v2 boundary, explicit tool registry, OAuth/CIMD store split, TypeScript workspaces, focused file-content and process-output modules |
 | Protocol longevity | **9.3/10** | MCP 2026-07-28 and CIMD are supported, 2025-11-25 and DCR remain for compatibility; real ChatGPT negotiation evidence remains |
 | Observability | **8.4/10** | authenticated fixed-cardinality metrics cover HTTP/auth/process/queue/checkpoint/disk; Windows lifecycle failures reach Event Log; dashboards remain operator work |
 
-Weighted overall maturity: **8.3/10 (B+, approaching A-)**. The ceiling is set by privilege separation and lifecycle evidence rather than core tool behavior.
+Weighted overall maturity: **8.8/10 (A- beta)**. The remaining ceiling is real ChatGPT and reboot evidence rather than the core privilege boundary.
 
 ## Performance evidence
 
@@ -48,13 +48,11 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 
 ### P0 — stable-service gate
 
-1. **Split identities and processes.** Put OAuth/public HTTP under a low-privilege gateway identity with no workspace access. Put execution under a dedicated worker identity and use an ACL-restricted named pipe with a small authenticated schema.
-2. **Run lifecycle acceptance on a disposable VM.** Record install, health, ChatGPT OAuth, restart, reboot, forced failure recovery, upgrade rollback, retention apply, and uninstall.
+1. **Finish external lifecycle evidence.** The clean Windows CI VM covers install, health, restart, injected upgrade rollback, and uninstall. Add a reboot-capable VM run and a real ChatGPT OAuth connection.
 
 ### P1 — maintainability and observability
 
-1. Split `file-service.ts` (695 lines) and `process-manager.ts` (682 lines) by storage, validation, execution, and lifecycle responsibility.
-2. Progressively replace inferred adapter types with explicit manifest, job, journal, and tool callback contracts.
+1. Progressively replace inferred adapter types with explicit manifest, job, journal, and tool callback contracts.
 3. Add operator dashboards and alerts for the implemented HTTP/auth/process/queue/checkpoint/disk metrics, then extend telemetry to retention and process-cancellation reasons.
 4. Add Cloudflare WAF examples for `/authorize`, `/register`, `/token`, and `/revoke`; keep server-side limits authoritative.
 5. Measure real ChatGPT CIMD/DCR negotiation during a compatibility window, then remove DCR only after the evidence shows it is unused.

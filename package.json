@@ -15,6 +15,6 @@
     "typecheck": "npm run typecheck --workspace @musu/remote-mcp-adapter && npm run typecheck --workspace cokacremote",
     "test": "npm run build && npm run test:vendor && npm run test:adapter",
     "test:vendor": "npm test --workspace cokacremote",
-    "test:adapter": "npm run build --workspace @musu/remote-mcp-adapter && node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/usn-journal.test.mjs tests/jobs.test.mjs tests/retention.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-job-object.test.mjs tests/windows-native-smoke.test.mjs"
+    "test:adapter": "npm run build --workspace @musu/remote-mcp-adapter && node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/usn-journal.test.mjs tests/jobs.test.mjs tests/retention.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-job-object.test.mjs tests/windows-native-smoke.test.mjs tests/windows-split-gateway-smoke.test.mjs"
   }
 }
