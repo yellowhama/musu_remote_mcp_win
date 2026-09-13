@@ -13,8 +13,10 @@ const roots=await Promise.all(configuredRoots.map(root=>fs.realpath(path.resolve
 if(new Set(roots).size!==roots.length||roots.some((root,index)=>roots.some((other,otherIndex)=>index!==otherIndex&&inside(root,other))))throw new Error('MCP_EDITABLE_ROOTS must contain unique non-overlapping paths');
 const backupRoot=path.resolve(process.env.MCP_BACKUP_ROOT);
 const jobsRoot=path.resolve(process.env.MCP_JOBS_ROOT);
-const snapshot=snapshotter({roots,backupRoot,maxFiles:200000,maxFileBytes:256*1024*1024,maxTotalBytes:32*1024**3,workers:64});
-const fastSnapshot=snapshotter({roots,backupRoot,maxFiles:2000,maxFileBytes:128*1024*1024,maxTotalBytes:512*1024**2,workers:4});
+const minFreeBytes=Number(process.env.MCP_MIN_FREE_BYTES||0);
+if(!Number.isSafeInteger(minFreeBytes)||minFreeBytes<0)throw new Error('MCP_MIN_FREE_BYTES must be a non-negative safe integer');
+const snapshot=snapshotter({roots,backupRoot,maxFiles:200000,maxFileBytes:256*1024*1024,maxTotalBytes:32*1024**3,workers:64,minFreeBytes});
+const fastSnapshot=snapshotter({roots,backupRoot,maxFiles:2000,maxFileBytes:128*1024*1024,maxTotalBytes:512*1024**2,workers:4,minFreeBytes});
 const gate=createMutationGate(async()=>({kind:'target-or-job'}),8);
 const jobs=await openJobs(jobsRoot);
 const callbacks=new Map(), registrations=new WeakSet(), processOwners=new Map();

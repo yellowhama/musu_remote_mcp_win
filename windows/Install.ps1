@@ -8,6 +8,11 @@ param(
     [string]$StateRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) 'state'),
     [string]$BackupRoot = (Join-Path (Split-Path -Parent $PSScriptRoot) 'backups'),
     [int]$Port = 39391,
+    [int]$ManifestDays = 30,
+    [int]$JobDays = 30,
+    [int]$ArchiveDays = 180,
+    [int]$LogDays = 14,
+    [long]$MinFreeBytes = 10737418240,
     [switch]$Service
 )
 
@@ -38,6 +43,10 @@ function Invoke-CheckedNative {
 $nodeMajor = [int]((& $node --version).TrimStart('v').Split('.')[0])
 if ($nodeMajor -lt 22) { throw 'Node.js 22 or newer is required. Node.js 24 LTS is recommended.' }
 if ($Port -lt 1 -or $Port -gt 65535) { throw 'Port must be between 1 and 65535.' }
+foreach ($retentionDays in @($ManifestDays, $JobDays, $ArchiveDays, $LogDays)) {
+    if ($retentionDays -lt 1 -or $retentionDays -gt 3650) { throw 'Retention days must be between 1 and 3650.' }
+}
+if ($MinFreeBytes -lt 0 -or $MinFreeBytes -gt 9007199254740991) { throw 'MinFreeBytes must be between 0 and 9007199254740991.' }
 $uri = [Uri]$PublicUrl
 if ($uri.Scheme -ne 'https' -and -not ($uri.Scheme -eq 'http' -and $uri.IsLoopback)) { throw 'PublicUrl must use HTTPS, except for a loopback-only installation.' }
 
@@ -85,6 +94,13 @@ $configuration = [ordered]@{
     backupRoot = $BackupRoot
     port = $Port
     defaultShell = $pwsh
+    retention = [ordered]@{
+        manifestDays = $ManifestDays
+        jobDays = $JobDays
+        archiveDays = $ArchiveDays
+        logDays = $LogDays
+        minFreeBytes = $MinFreeBytes
+    }
 }
 $previousConfig = if (Test-Path -LiteralPath $configFile -PathType Leaf) { [IO.File]::ReadAllBytes($configFile) } else { $null }
 $previousServiceConfig = if (Test-Path -LiteralPath $serviceConfig -PathType Leaf) { [IO.File]::ReadAllBytes($serviceConfig) } else { $null }

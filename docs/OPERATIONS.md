@@ -43,6 +43,12 @@ Use a selected manifest and restore only to a new empty directory outside every 
 
 If an unexpected write occurs, stop both services, preserve state, backups, service logs, OAuth metadata, and the affected repository Git state. Revoke the affected OAuth grant, rotate the approval key offline, inspect checkpoint manifests, and restore into a new directory for comparison. Do not overwrite the live workspace during investigation.
 
+## Retention maintenance
+
+Run `pwsh -File windows\Maintain.ps1` for a dry-run. Review the counts and reclaimable bytes, stop both the Windows service and every foreground MCP process, then run `pwsh -File windows\Maintain.ps1 -Apply`. Apply mode refuses to run while the service or configured port is active. It always retains the newest manifest, derives the reachable object set from retained manifests, archives old terminal jobs, stages deletions under the backup maintenance directory, and writes prepared and committed plan records.
+
+The `retention.minFreeBytes` setting is a pre-mutation disk watermark. A checkpoint fails before object writes when the available backup volume cannot hold the checkpoint's worst-case bytes while preserving this reserve. The installer default is 10 GiB.
+
 ## Uninstall
 
 `windows\Uninstall-Service.ps1` removes only the MCP service registration. Remove Cloudflare service registration separately using Cloudflare's documented command. Source, configuration, state, backups, and ACLs remain for explicit review and recovery.

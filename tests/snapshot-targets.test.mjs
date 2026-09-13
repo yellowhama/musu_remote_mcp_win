@@ -120,6 +120,14 @@ test('file count, individual size, total size and cancellation fail closed', asy
     assert.throws(() => snapshotter({ roots: f.roots, backupRoot: f.backupRoot, ...limits }));
 });
 
+test('minimum free-space watermark fails before object writes', async t => {
+  const f = await fixture(t, { minFreeBytes: Number.MAX_SAFE_INTEGER });
+  const file = path.join(f.roots[0], 'small');
+  await fs.writeFile(file, 'small');
+  await assert.rejects(f.snapshot([file]), /Insufficient backup disk space/);
+  assert.deepEqual(await fs.readdir(path.join(f.backupRoot, 'objects')), []);
+});
+
 test('restore reads back bytes for both roots and never overwrites originals or existing target', async t => {
   const f = await fixture(t), a = path.join(f.roots[0], 'a'), b = path.join(f.roots[1], 'b.md');
   await fs.writeFile(a, 'code'); await fs.writeFile(b, '한글 위키');

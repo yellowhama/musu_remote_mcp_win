@@ -6,10 +6,20 @@ const projectRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const configPath = path.resolve(process.argv[2] || path.join(projectRoot, 'config', 'windows.json'));
 const raw = await fs.readFile(configPath);
 const config = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw));
-const allowed = new Set(['version', 'publicUrl', 'editableRoots', 'defaultCwd', 'stateRoot', 'backupRoot', 'port', 'defaultShell']);
+const allowed = new Set(['version', 'publicUrl', 'editableRoots', 'defaultCwd', 'stateRoot', 'backupRoot', 'port', 'defaultShell', 'retention']);
 for (const key of Object.keys(config)) if (!allowed.has(key)) throw new Error(`Unknown Windows configuration field: ${key}`);
 if (config.version !== 1) throw new Error('Windows configuration version must be 1');
 if (!Array.isArray(config.editableRoots) || config.editableRoots.length === 0) throw new Error('editableRoots must be a non-empty array');
+if (config.retention !== undefined) {
+  const fields = new Set(['manifestDays', 'jobDays', 'archiveDays', 'logDays', 'minFreeBytes']);
+  if (!config.retention || Array.isArray(config.retention) || typeof config.retention !== 'object') throw new Error('retention must be an object');
+  for (const [key, value] of Object.entries(config.retention)) {
+    if (!fields.has(key)) throw new Error(`Unknown retention field: ${key}`);
+    if (key === 'minFreeBytes') {
+      if (!Number.isSafeInteger(value) || value < 0) throw new Error('minFreeBytes must be a non-negative safe integer');
+    } else if (!Number.isSafeInteger(value) || value < 1 || value > 3650) throw new Error(`${key} must be an integer between 1 and 3650`);
+  }
+}
 
 const absolute = (value, name) => {
   if (typeof value !== 'string' || !path.isAbsolute(value)) throw new Error(`${name} must be an absolute Windows path`);
@@ -71,6 +81,7 @@ Object.assign(process.env, {
   MCP_DEFAULT_SHELL: config.defaultShell || 'pwsh.exe',
   MCP_BACKUP_ROOT: backupRoot,
   MCP_JOBS_ROOT: path.join(stateRoot, 'jobs'),
+  MCP_MIN_FREE_BYTES: String(config.retention?.minFreeBytes ?? 10 * 1024 ** 3),
 });
 
 await import('../entrypoint.mjs');

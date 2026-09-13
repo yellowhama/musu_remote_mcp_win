@@ -9,5 +9,12 @@
   "stateRoot": "F:\\musu-remote-mcp-data\\state",
   "backupRoot": "F:\\musu-remote-mcp-data\\backups",
   "port": 39391,
-  "defaultShell": "pwsh.exe"
+  "defaultShell": "pwsh.exe",
+  "retention": {
+    "manifestDays": 30,
+    "jobDays": 30,
+    "archiveDays": 180,
+    "logDays": 14,
+    "minFreeBytes": 10737418240
+  }
 }

@@ -32,4 +32,4 @@ jobs:
           npm test --prefix vendor
       - name: Test Windows adapter and native entrypoint
         shell: pwsh
-        run: node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/jobs.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-native-smoke.test.mjs
+        run: node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/jobs.test.mjs tests/retention.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-native-smoke.test.mjs

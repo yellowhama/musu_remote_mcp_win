@@ -131,6 +131,16 @@ npm test --prefix vendor
 node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/jobs.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-native-smoke.test.mjs
 ```
 
+Preview retention without changing files, then stop the MCP server and apply the reviewed plan:
+
+```powershell
+pwsh -File .\windows\Maintain.ps1
+pwsh -File .\windows\Maintain.ps1 -Apply
+```
+
+Retention keeps the newest manifest even when it is older than the configured window, archives terminal jobs, removes only objects unreachable from retained manifests, and records a two-phase maintenance plan before deletion.
+Before every direct or full checkpoint, the runtime also reserves the configured `retention.minFreeBytes` after accounting for the checkpoint's worst-case bytes. The installer defaults this watermark to 10 GiB.
+
 GitHub Actions runs the same build and test flow on `windows-latest` with Node.js 24. The native smoke test starts the real OAuth server, checks health 200 and unauthenticated MCP 401, verifies key creation, and terminates the process tree.
 
 See [the Dockerless research](docs/DOCKERLESS_WINDOWS_RESEARCH_20260913.md), [architecture](docs/ARCHITECTURE.md), [operations](docs/OPERATIONS.md), and [optimization and maturity review](docs/OPTIMIZATION_AND_MATURITY_REVIEW_20260913.md).

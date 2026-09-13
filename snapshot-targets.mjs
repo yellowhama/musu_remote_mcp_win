@@ -47,9 +47,10 @@ export async function digestFile(file, signal) {
   } finally { await handle.close(); }
 }
 
-export function snapshotter({ roots, backupRoot, maxFiles=100000, maxFileBytes=256*1024*1024, maxTotalBytes=16*1024**3, workers=8 }) {
+export function snapshotter({ roots, backupRoot, maxFiles=100000, maxFileBytes=256*1024*1024, maxTotalBytes=16*1024**3, workers=8, minFreeBytes=0 }) {
   roots = roots.map(r => path.resolve(r));
   for (const n of [maxFiles,maxFileBytes,maxTotalBytes,workers]) if (!Number.isSafeInteger(n)||n<1) throw new Error('Invalid snapshot limit');
+  if (!Number.isSafeInteger(minFreeBytes)||minFreeBytes<0) throw new Error('Invalid minimum free byte limit');
   if (workers>64) throw new Error('Too many workers');
   return async function snapshot(targets, { signal, full=false, tool='file-change', progress=()=>{} }={}) {
     const id = `${Date.now()}-${randomUUID()}`;
@@ -89,6 +90,10 @@ export function snapshotter({ roots, backupRoot, maxFiles=100000, maxFileBytes=2
     }
     await fs.mkdir(path.join(backupRoot,'objects'),{recursive:true});
     await fs.mkdir(path.join(backupRoot,'manifests'),{recursive:true});
+    const filesystem = await fs.statfs(backupRoot, { bigint: true });
+    const availableBytes = filesystem.bavail * filesystem.bsize;
+    const requiredBytes = BigInt(totalBytes) + BigInt(minFreeBytes);
+    if (availableBytes < requiredBytes) throw new Error(`Insufficient backup disk space; availableBytes=${availableBytes}, checkpointBytes=${totalBytes}, minimumFreeBytes=${minFreeBytes}`);
     const verified=new Map();
     let next=0,failed=false;
     const outcomes=await Promise.allSettled(Array.from({length:workers},async()=>{
