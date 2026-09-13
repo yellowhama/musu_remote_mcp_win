@@ -64,6 +64,7 @@ function Invoke-CheckedNative {
 function New-ServiceXml {
     param([string]$Id, [string]$DisplayName, [string]$Role, [string]$Executable, [string]$LogPath)
     $xml = [xml]'<service></service>'
+    $serviceElement = $xml.DocumentElement
     foreach ($entry in @(
         @('id', $Id), @('name', $DisplayName), @('description', "Musu Remote MCP $Role"),
         @('executable', $node),
@@ -71,13 +72,13 @@ function New-ServiceXml {
         @('workingdirectory', $projectRoot), @('startmode', 'Automatic'),
         @('delayedAutoStart', 'true'), @('stoptimeout', '20 sec'), @('logpath', $LogPath)
     )) {
-        $element = $xml.CreateElement($entry[0]); $element.InnerText = $entry[1]; [void]$xml.service.AppendChild($element)
+        $element = $xml.CreateElement($entry[0]); $element.InnerText = $entry[1]; [void]$serviceElement.AppendChild($element)
     }
     $account = $xml.CreateElement('serviceaccount')
     $username = $xml.CreateElement('username'); $username.InnerText = "NT SERVICE\$Id"; [void]$account.AppendChild($username)
-    [void]$xml.service.AppendChild($account)
-    $logging = $xml.CreateElement('log'); $logging.SetAttribute('mode', 'roll'); [void]$xml.service.AppendChild($logging)
-    $failure = $xml.CreateElement('onfailure'); $failure.SetAttribute('action', 'restart'); $failure.SetAttribute('delay', '10 sec'); [void]$xml.service.AppendChild($failure)
+    [void]$serviceElement.AppendChild($account)
+    $logging = $xml.CreateElement('log'); $logging.SetAttribute('mode', 'roll'); [void]$serviceElement.AppendChild($logging)
+    $failure = $xml.CreateElement('onfailure'); $failure.SetAttribute('action', 'restart'); $failure.SetAttribute('delay', '10 sec'); [void]$serviceElement.AppendChild($failure)
     $xml.Save((Join-Path $serviceRoot "$Id.xml"))
 }
 
