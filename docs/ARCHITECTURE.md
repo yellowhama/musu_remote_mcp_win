@@ -6,7 +6,7 @@
 
 The TypeScript SDK v2 handler serves MCP 2026-07-28. A separately routed legacy handler retains MCP 2025-11-25 compatibility. Tool registration passes through an explicit typed registry owned by the guard layer; no SDK prototype is modified.
 
-The TypeScript application remains under `vendor/`. `windows/Install.ps1` installs its exact locked dependencies, builds it, and creates a local `node_modules` junction so the root safety adapter resolves the same dependency tree. No global npm packages are required.
+The TypeScript application remains under the `vendor` npm workspace. The repository root owns the lockfile and dependency tree, so the safety adapter and application resolve one reproducible installation without a junction. No global npm packages are required.
 
 ## Service lifecycle
 

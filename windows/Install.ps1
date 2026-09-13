@@ -72,18 +72,8 @@ if ((Test-PathInside $StateRoot $BackupRoot) -or (Test-PathInside $BackupRoot $S
 New-Item -ItemType Directory -Force -Path $configDirectory, $StateRoot, $BackupRoot | Out-Null
 
 Write-Host 'Installing exact npm dependencies and building TypeScript...'
-Invoke-CheckedNative -Executable $npm -FailureMessage 'npm ci failed' -Arguments @('ci', '--prefix', (Join-Path $projectRoot 'vendor'))
-Invoke-CheckedNative -Executable $npm -FailureMessage 'TypeScript build failed' -Arguments @('run', 'build', '--prefix', (Join-Path $projectRoot 'vendor'))
-$rootModules = Join-Path $projectRoot 'node_modules'
-$vendorModules = Join-Path $projectRoot 'vendor\node_modules'
-if (-not (Test-Path -LiteralPath $rootModules)) {
-    New-Item -ItemType Junction -Path $rootModules -Target $vendorModules | Out-Null
-} else {
-    $modulesItem = Get-Item -LiteralPath $rootModules
-    if ($modulesItem.LinkType -ne 'Junction' -or [IO.Path]::GetFullPath([string]$modulesItem.Target) -ne [IO.Path]::GetFullPath($vendorModules)) {
-        throw "Existing node_modules is not the expected vendor junction: $rootModules"
-    }
-}
+Invoke-CheckedNative -Executable $npm -FailureMessage 'npm ci failed' -Arguments @('ci', '--prefix', $projectRoot)
+Invoke-CheckedNative -Executable $npm -FailureMessage 'TypeScript build failed' -Arguments @('run', 'build', '--prefix', $projectRoot)
 
 $configuration = [ordered]@{
     version = 1

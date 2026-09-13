@@ -1,0 +1,22 @@
+{
+  "name": "musu-remote-mcp-win",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT",
+  "workspaces": [
+    "vendor"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "scripts": {
+    "build": "npm run build --workspace cokacremote",
+    "typecheck": "npm run typecheck --workspace cokacremote",
+    "test": "npm run test:vendor && npm run test:adapter",
+    "test:vendor": "npm test --workspace cokacremote",
+    "test:adapter": "node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/usn-journal.test.mjs tests/jobs.test.mjs tests/retention.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-native-smoke.test.mjs"
+  }
+}

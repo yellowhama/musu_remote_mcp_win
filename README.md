@@ -125,10 +125,9 @@ Snapshots are file-consistent rather than filesystem-atomic. They do not capture
 ## Verification
 
 ```powershell
-npm ci --prefix vendor
-npm run build --prefix vendor
-npm test --prefix vendor
-node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/usn-journal.test.mjs tests/jobs.test.mjs tests/retention.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-native-smoke.test.mjs
+npm ci
+npm run build
+npm test
 ```
 
 Preview retention without changing files, then stop the MCP server and apply the reviewed plan:

@@ -17,19 +17,18 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: vendor/package-lock.json
+          cache-dependency-path: package-lock.json
       - name: Install exact dependencies
         shell: pwsh
         run: |
-          npm ci --prefix vendor
+          npm ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          New-Item -ItemType Junction -Path node_modules -Target (Resolve-Path vendor/node_modules).Path | Out-Null
       - name: Build and test upstream server
         shell: pwsh
         run: |
-          npm run build --prefix vendor
+          npm run build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm test --prefix vendor
+          npm run test:vendor
       - name: Test Windows adapter and native entrypoint
         shell: pwsh
         run: node --test tests/checkpoint.test.mjs tests/snapshot-targets.test.mjs tests/usn-journal.test.mjs tests/jobs.test.mjs tests/retention.test.mjs tests/tunnel-runtime.test.mjs tests/optimized-guard.integration.mjs tests/windows-native-smoke.test.mjs

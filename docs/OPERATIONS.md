@@ -31,7 +31,7 @@ Never move `stateRoot` by copying only selected files. Stop the service, preserv
 1. Stop `MusuRemoteMcp`.
 2. Back up `config\windows.json`, the complete state root, and the WinSW XML.
 3. Pull the reviewed source revision.
-4. Run `npm ci --prefix vendor`, `npm run build --prefix vendor`, and the test commands in the README.
+4. Run `npm ci`, `npm run build`, and `npm test` from the repository root.
 5. Start the service and check local health, remote health, OAuth, tool count, a read, and a disposable write/readback.
 6. Update cloudflared separately; Windows cloudflared does not auto-update.
 
