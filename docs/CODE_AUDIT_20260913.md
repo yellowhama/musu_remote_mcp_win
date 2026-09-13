@@ -19,6 +19,7 @@ No critical correctness defect was found in the current foreground or split-proc
 | High | CIMD URL retrieval could expose an SSRF path | canonical HTTPS identifiers, public-address filtering, DNS pinning, no redirects, bounded fetch and cache | CIMD unit and OAuth integration tests |
 | High | OAuth gateway and arbitrary-command execution shared one service identity | separate virtual service accounts, deny ACLs, loopback-only worker, body-bound HMAC assertions | two-process smoke test and clean-VM ACL gate |
 | Medium | WinSW 2.12 upgrade path called unsupported `refresh`; the first rollback gate failed before its intended checkpoint | stop existing wrapper, rewrite XML/config while stopped, restart; CI now asserts the exact injected-failure marker | clean-VM run 34769642484, zero `refresh` errors |
+| Medium | Operators could not read compatibility metrics because only ChatGPT held the OAuth access token | separate 256-bit metrics key accepted only on `/metrics`; before/after capture tool stores counts, not secrets | metrics-token isolation tests and Windows capture-script test |
 
 ## Current security boundary
 

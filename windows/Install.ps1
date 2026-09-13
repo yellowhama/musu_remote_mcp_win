@@ -200,4 +200,5 @@ try {
 
 Write-Host "Configuration: $configFile"
 Write-Host "Approval key:  $(Join-Path $StateRoot 'approval-key.txt')"
-Write-Host 'The approval key content was not printed.'
+Write-Host "Metrics key:   $(Join-Path $StateRoot 'metrics-key.txt')"
+Write-Host 'Key contents were not printed.'

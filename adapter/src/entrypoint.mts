@@ -9,6 +9,7 @@ process.env.MCP_PUBLIC_URL = settings.publicUrl;
 process.env.MCP_ALLOWED_HOSTS = `${new URL(settings.publicUrl).hostname},localhost,127.0.0.1,mcp`;
 process.env.MCP_ALLOWED_ORIGINS = new URL(settings.publicUrl).origin;
 process.env.MCP_OAUTH_APPROVAL_KEY = (await fs.readFile(path.join(stateRoot, 'approval-key.txt'), 'utf8')).trim();
+process.env.MCP_METRICS_TOKEN = (await fs.readFile(path.join(stateRoot, 'metrics-key.txt'), 'utf8')).trim();
 delete process.env.MCP_AUTH_TOKEN;
 await import('./guard.mjs');
 const upstreamServerUrl = new URL('../../vendor/dist/src/server.js', import.meta.url);

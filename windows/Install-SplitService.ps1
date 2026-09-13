@@ -178,3 +178,4 @@ $installationComplete = $true
 Write-Host "Gateway service: MusuRemoteMcpGateway (NT SERVICE\MusuRemoteMcpGateway)"
 Write-Host "Worker service:  MusuRemoteMcpWorker (NT SERVICE\MusuRemoteMcpWorker)"
 Write-Host "Approval key:   $(Join-Path $StateRoot 'approval-key.txt')"
+Write-Host "Metrics key:    $(Join-Path $StateRoot 'metrics-key.txt')"

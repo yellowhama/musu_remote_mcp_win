@@ -58,13 +58,15 @@ pwsh -File .\windows\Install.ps1 `
 pwsh -File .\windows\Start-Local.ps1
 ```
 
-The installer uses `npm ci`, builds the vendored TypeScript server, creates `config\windows.json`, initializes the OAuth approval key, and restricts the state directory ACL. It never prints the key value.
+The installer uses `npm ci`, builds the vendored TypeScript server, creates `config\windows.json`, initializes separate OAuth approval and metrics keys, and restricts the state directory ACL. It never prints either key value.
 
 The approval key full path is the configured `stateRoot` plus `approval-key.txt`, for example:
 
 ```text
 F:\musu-remote-mcp-data\state\approval-key.txt
 ```
+
+The metrics-only key is stored beside it at `metrics-key.txt`. It can read `/metrics` and cannot authenticate to `/mcp`.
 
 ## Install as a Windows service (beta)
 
@@ -106,12 +108,27 @@ Quick Tunnels are intended only for testing. Their hostname changes when restart
 2. Confirm the named tunnel routes `https://your-host.example/health`.
 3. In ChatGPT developer mode, create a custom MCP app at `https://your-host.example/mcp` and choose OAuth.
 4. Enter the approval key only on this server's OAuth approval page.
+5. Scan tools and confirm that 23 tools are present.
+6. Start with a read-only request for the repository instruction file.
 
 The authorization-server metadata advertises Client ID Metadata Document (CIMD) support while retaining Dynamic Client Registration (DCR) for existing ChatGPT clients. CIMD documents must use a canonical HTTPS URL and a public network destination; the server pins the resolved address, rejects redirects, and bounds retrieval time and size.
 
-Authenticated operators can scrape `/metrics` with the same bearer/OAuth credentials used for MCP. The fixed-cardinality metrics cover HTTP status and latency, authentication rejection, CIMD-versus-DCR resolution, managed processes, mutation queue depth, checkpoint outcomes/bytes/duration, and workspace free space.
-5. Scan tools and confirm that 23 tools are present.
-6. Start with a read-only request for the repository instruction file.
+Authenticated operators can scrape `/metrics` with the dedicated metrics key or a valid OAuth credential. The fixed-cardinality metrics cover HTTP status and latency, authentication rejection, CIMD-versus-DCR resolution, managed processes, mutation queue depth, checkpoint outcomes/bytes/duration, and workspace free space. The metrics key is route-scoped and does not grant MCP tool access.
+
+For a measured fresh ChatGPT connection, capture a baseline, create and exercise a new app, then capture the result:
+
+```powershell
+pwsh -File .\windows\Capture-ChatGPTCompatibility.ps1 -Phase Begin
+# Complete OAuth, scan tools, and make at least one tool call in ChatGPT.
+pwsh -File .\windows\Capture-ChatGPTCompatibility.ps1 -Phase End
+```
+
+On an elevated disposable VM, prepare an automatic post-boot verification and then reboot:
+
+```powershell
+pwsh -File .\windows\Test-RebootPersistence.ps1 -Phase Prepare -RestartComputer
+pwsh -File .\windows\Test-RebootPersistence.ps1 -Phase Status
+```
 
 ## Configuration
 

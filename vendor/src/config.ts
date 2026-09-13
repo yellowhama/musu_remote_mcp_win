@@ -9,6 +9,7 @@ export interface AppConfig {
   allowedOrigins: string[] | undefined;
   trustProxyHops: number;
   authToken: string | undefined;
+  metricsToken: string | undefined;
   allowNoAuth: boolean;
   oauthEnabled: boolean;
   oauthApprovalKey: string | undefined;
@@ -120,6 +121,10 @@ export function loadConfig(
 ): AppConfig {
   const allowNoAuth = parseBoolean(env.MCP_ALLOW_NO_AUTH, false);
   const authToken = env.MCP_AUTH_TOKEN?.trim() || undefined;
+  const metricsToken = env.MCP_METRICS_TOKEN?.trim() || undefined;
+  if (metricsToken && metricsToken.length < 32) {
+    throw new Error("MCP_METRICS_TOKEN must contain at least 32 characters");
+  }
   const oauthEnabled = parseBoolean(env.MCP_OAUTH_ENABLED, false);
   const oauthApprovalKey = oauthEnabled
     ? env.MCP_OAUTH_APPROVAL_KEY?.trim() || authToken
@@ -187,6 +192,7 @@ export function loadConfig(
       16,
     ),
     authToken,
+    metricsToken,
     allowNoAuth,
     oauthEnabled,
     oauthApprovalKey,

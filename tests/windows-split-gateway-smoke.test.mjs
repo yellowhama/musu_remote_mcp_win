@@ -37,6 +37,7 @@ test('separate gateway and worker processes complete OAuth and signed MCP proxyi
   const backupRoot = path.join(base, 'backups');
   await Promise.all([workspace, stateRoot, workerStateRoot, brokerRoot, backupRoot].map(directory => fs.mkdir(directory)));
   await fs.writeFile(path.join(stateRoot, 'approval-key.txt'), 'split-approval-key');
+  await fs.writeFile(path.join(stateRoot, 'metrics-key.txt'), 'split-metrics-key-with-at-least-32-characters');
   await fs.writeFile(path.join(brokerRoot, 'internal-key.txt'), randomBytes(48).toString('base64url'));
   const port = await reservePort();
   const workerPort = await reservePort();
@@ -118,4 +119,11 @@ test('separate gateway and worker processes complete OAuth and signed MCP proxyi
   const metricsBody = await metrics.text();
   assert.match(metricsBody, /musu_oauth_client_resolution_total/);
   assert.match(metricsBody, /musu_worker_checkpoints_total/);
+  const operatorMetrics = await fetch(`${baseUrl}/metrics`, { headers: { authorization: 'Bearer split-metrics-key-with-at-least-32-characters' } });
+  assert.equal(operatorMetrics.status, 200);
+  const metricsKeyAtMcp = await fetch(`${baseUrl}/mcp`, {
+    method: 'POST', headers: { authorization: 'Bearer split-metrics-key-with-at-least-32-characters', 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'initialize', params: {} }),
+  });
+  assert.equal(metricsKeyAtMcp.status, 401);
 });

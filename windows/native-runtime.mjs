@@ -100,9 +100,11 @@ if (role === 'combined') {
   if (internalKey.length < 32) throw new Error('Internal gateway key is missing or invalid');
   if (role === 'gateway') {
     const approvalKey = (await fs.readFile(path.join(stateRoot, 'approval-key.txt'), 'utf8')).trim();
+    const metricsKey = (await fs.readFile(path.join(stateRoot, 'metrics-key.txt'), 'utf8')).trim();
     Object.assign(process.env, {
       MCP_HOST: '127.0.0.1', MCP_PORT: String(port), MCP_TRUST_PROXY_HOPS: '1',
       MCP_ALLOW_NO_AUTH: 'false', MCP_OAUTH_ENABLED: 'true', MCP_OAUTH_APPROVAL_KEY: approvalKey,
+      MCP_METRICS_TOKEN: metricsKey,
       MCP_PUBLIC_URL: publicUrl, MCP_ALLOWED_HOSTS: `${parsedUrl.hostname},localhost,127.0.0.1`,
       MCP_ALLOWED_ORIGINS: parsedUrl.origin, MCP_OAUTH_STATE_FILE: path.join(stateRoot, 'oauth-state.sqlite'),
       MCP_DEFAULT_CWD: projectRoot, MCP_GATEWAY_WORKER_URL: `http://127.0.0.1:${workerPort}`,

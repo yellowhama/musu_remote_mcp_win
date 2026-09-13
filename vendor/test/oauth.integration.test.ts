@@ -49,6 +49,7 @@ describe("OAuth 2.1 MCP authorization", () => {
       {
         MCP_OAUTH_ENABLED: "true",
         MCP_OAUTH_APPROVAL_KEY: "oauth-login-secret",
+        MCP_METRICS_TOKEN: "metrics-only-secret-with-32-characters",
         MCP_PUBLIC_URL: baseUrl,
         MCP_OAUTH_STATE_FILE: stateFile,
         MCP_HOST: "127.0.0.1",
@@ -85,6 +86,19 @@ describe("OAuth 2.1 MCP authorization", () => {
       `${baseUrl}/.well-known/oauth-protected-resource/mcp`,
     );
     expect((await fetch(`${baseUrl}/metrics`)).status).toBe(401);
+    const operatorMetrics = await fetch(`${baseUrl}/metrics`, {
+      headers: { authorization: "Bearer metrics-only-secret-with-32-characters" },
+    });
+    expect(operatorMetrics.status).toBe(200);
+    const metricsTokenAtMcp = await fetch(resourceUrl, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer metrics-only-secret-with-32-characters",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 99, method: "initialize", params: {} }),
+    });
+    expect(metricsTokenAtMcp.status).toBe(401);
 
     for (const metadataPath of [
       "/.well-known/oauth-protected-resource",
@@ -243,7 +257,7 @@ describe("OAuth 2.1 MCP authorization", () => {
     });
     expect(metricsResponse.status).toBe(200);
     const metrics = await metricsResponse.text();
-    expect(metrics).toContain('musu_auth_rejections_total{reason="bearer"} 2');
+    expect(metrics).toContain('musu_auth_rejections_total{reason="bearer"} 3');
     expect(metrics).toContain("musu_workspace_disk_free_bytes");
     expect(metrics).toContain("musu_checkpoints_total");
 

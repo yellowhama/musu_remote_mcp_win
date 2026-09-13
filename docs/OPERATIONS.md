@@ -4,7 +4,7 @@
 
 ```powershell
 Invoke-WebRequest http://127.0.0.1:39391/health
-Get-Service MusuRemoteMcp
+Get-Service MusuRemoteMcpGateway,MusuRemoteMcpWorker
 Get-Service cloudflared
 ```
 
@@ -13,9 +13,9 @@ Expected local health is HTTP 200. An unauthenticated POST to `/mcp` must return
 ## Start, stop, and restart
 
 ```powershell
-Start-Service MusuRemoteMcp
-Stop-Service MusuRemoteMcp
-Restart-Service MusuRemoteMcp
+Start-Service MusuRemoteMcpWorker,MusuRemoteMcpGateway
+Stop-Service MusuRemoteMcpGateway,MusuRemoteMcpWorker
+Restart-Service MusuRemoteMcpWorker,MusuRemoteMcpGateway
 ```
 
 For foreground diagnostics, stop the service and run `pwsh -File .\windows\Start-Local.ps1` from the repository.
@@ -28,12 +28,13 @@ Never move `stateRoot` by copying only selected files. Stop the service, preserv
 
 ## Upgrade
 
-1. Stop `MusuRemoteMcp`.
+1. Stop `MusuRemoteMcpGateway` and `MusuRemoteMcpWorker`.
 2. Back up `config\windows.json`, the complete state root, and the WinSW XML.
 3. Pull the reviewed source revision.
 4. Run `npm ci`, `npm run build`, and `npm test` from the repository root.
-5. Start the service and check local health, remote health, OAuth, tool count, a read, and a disposable write/readback.
-6. Update cloudflared separately; Windows cloudflared does not auto-update.
+5. Run `Install-SplitService.ps1` again; it stops the wrappers, updates configuration, restarts both services, and rolls back on a failed health gate.
+6. Check local health, remote health, OAuth, tool count, a read, and a disposable write/readback.
+7. Update cloudflared separately; Windows cloudflared does not auto-update.
 
 ## Restore drill
 
@@ -51,7 +52,7 @@ The `retention.minFreeBytes` setting is a pre-mutation disk watermark. A checkpo
 
 ## Uninstall
 
-`windows\Uninstall-Service.ps1` removes only the MCP service registration. Remove Cloudflare service registration separately using Cloudflare's documented command. Source, configuration, state, backups, and ACLs remain for explicit review and recovery.
+`windows\Uninstall-SplitService.ps1` removes only the gateway and worker service registrations. Remove Cloudflare service registration separately using Cloudflare's documented command. Source, configuration, state, backups, and ACLs remain for explicit review and recovery.
 
 ## Edge protection and OAuth compatibility
 
@@ -63,6 +64,10 @@ OAuth state is SQLite WAL. Stop the server before offline copying, and preserve 
 
 ## Metrics and Windows events
 
-Scrape `https://your-host.example/metrics` with a valid bearer or OAuth access token. Alert on sustained authentication rejection, non-2xx MCP responses, checkpoint failures, queue saturation, declining free space, and retained process growth. Split service mode registers `MusuRemoteMcpGateway` and `MusuRemoteMcpWorker` in the Windows Application log; event IDs 900–903 cover start, normal stop, shutdown failure, and startup failure.
+Scrape `https://your-host.example/metrics` with the dedicated key at `<stateRoot>\metrics-key.txt` or a valid OAuth access token. This key is accepted only on `/metrics` and does not grant MCP access. Alert on sustained authentication rejection, non-2xx MCP responses, checkpoint failures, queue saturation, declining free space, and retained process growth. Split service mode registers `MusuRemoteMcpGateway` and `MusuRemoteMcpWorker` in the Windows Application log; event IDs 900–903 cover start, normal stop, shutdown failure, and startup failure.
 
-Use `musu_oauth_client_resolution_total{method="cimd"|"dcr",outcome="success"|"failure"}` to measure ChatGPT registration compatibility. Preserve a dated counter snapshot at the start and end of the compatibility window before considering DCR removal.
+Use `Capture-ChatGPTCompatibility.ps1 -Phase Begin`, create and exercise a fresh ChatGPT app, and then run it with `-Phase End`. It records deltas for `musu_oauth_client_resolution_total` and successful MCP requests without storing either secret. Preserve the generated result before considering DCR removal.
+
+## Reboot acceptance
+
+On an elevated disposable VM with both split services healthy, run `Test-RebootPersistence.ps1 -Phase Prepare -RestartComputer`. It registers a one-time SYSTEM startup task, records the pre-reboot boot time, and after startup verifies that the boot time advanced, both services recovered, both health endpoints respond, deny ACLs remain, and lifecycle events exist. Read the result later with `Test-RebootPersistence.ps1 -Phase Status`.

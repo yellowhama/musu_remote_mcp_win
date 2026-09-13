@@ -16,6 +16,7 @@ describe("loadConfig", () => {
     const config = loadConfig(
       {
         MCP_AUTH_TOKEN: "secret",
+        MCP_METRICS_TOKEN: "metrics-secret-with-at-least-32-characters",
         MCP_PORT: "4321",
         MCP_DEFAULT_CWD: rootPath,
         MCP_ALLOWED_HOSTS: "mcp.example.com,localhost",
@@ -28,6 +29,7 @@ describe("loadConfig", () => {
       defaultCwd: rootPath,
       trustProxyHops: 0,
       authToken: "secret",
+      metricsToken: "metrics-secret-with-at-least-32-characters",
       allowedHosts: ["mcp.example.com", "localhost"],
     });
   });
@@ -140,5 +142,12 @@ describe("loadConfig", () => {
       MCP_AUTH_TOKEN: "worker-token",
       MCP_INTERNAL_AUTH_KEY: "short",
     }, "/tmp")).toThrow("at least 32 characters");
+  });
+
+  it("requires a strong dedicated metrics token", () => {
+    expect(() => loadConfig({
+      MCP_AUTH_TOKEN: "worker-token",
+      MCP_METRICS_TOKEN: "short",
+    }, "/tmp")).toThrow("MCP_METRICS_TOKEN must contain at least 32 characters");
   });
 });

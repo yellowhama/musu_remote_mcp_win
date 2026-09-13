@@ -12,7 +12,7 @@ import {
 } from "@modelcontextprotocol/node";
 import express, { type Request, type Response } from "express";
 
-import { createBearerAuth, createHostValidation, createOriginValidation } from "./auth.js";
+import { createBearerAuth, createHostValidation, createMetricsAuth, createOriginValidation } from "./auth.js";
 import type { AppConfig } from "./config.js";
 import { errorMessage } from "./errors.js";
 import { createInternalHeaders } from "./internal-auth.js";
@@ -150,6 +150,7 @@ export async function startHttpServer(
     }));
   }
   const authenticate = createBearerAuth(config, oauthProvider, (reason) => metrics.rejectAuth(reason));
+  const authenticateMetrics = createMetricsAuth(config.metricsToken, authenticate);
   const parseMcpJson = express.json({ limit: config.maxRequestBody });
   const modernMcpHandler = createMcpHandler(
     () => createMcpServer(config, services),
@@ -182,7 +183,7 @@ export async function startHttpServer(
       oauthEnabled: config.oauthEnabled,
     });
   });
-  app.get("/metrics", authenticate, (_request, response) => {
+  app.get("/metrics", authenticateMetrics, (_request, response) => {
     void metrics.render(config, services).then(async (body) => {
       if (config.gatewayWorkerUrl && config.internalAuthKey) {
         const workerMetrics = await fetch(`${config.gatewayWorkerUrl}/metrics`, {

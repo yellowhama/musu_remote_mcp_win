@@ -9,9 +9,9 @@
 | Unsigned/replayed/altered internal request | Pass | Worker returns 401; unit tests bind client, timestamp, nonce, and body hash |
 | Windows Job Object descendant cleanup | Pass | Real PowerShell child/grandchild termination test |
 | Service install, restart, injected upgrade rollback, uninstall | Pass | [GitHub Actions run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) installed both WinSW services, validated deny ACLs, restarted them, reached the intended failure-injection checkpoint, restored health, and uninstalled them |
-| Reboot persistence | Pending external VM | Current workstation session is not elevated and has no Hyper-V module; hosted Actions cannot reboot in place |
-| Real ChatGPT OAuth | Pending external account/tunnel | Requires the operator's ChatGPT developer-mode session and fixed public tunnel |
-| CIMD versus DCR measurement | Ready | `/metrics` exposes bounded success/failure counters by registration method |
+| Reboot persistence | Harness ready; execution pending | `Test-RebootPersistence.ps1` records boot identity, installs a one-time SYSTEM verifier, and checks health, automatic services, ACLs, and events after reboot |
+| Real ChatGPT OAuth | Capture ready; execution pending | Requires the operator's ChatGPT developer-mode session and fixed public tunnel |
+| CIMD versus DCR measurement | Capture tested; real result pending | dedicated route-scoped metrics key plus `Capture-ChatGPTCompatibility.ps1`; mock before/after test passes |
 
 The accepted run completed 52 vendor tests with one platform-specific skip, 67 adapter/native tests, dependency audit with zero known vulnerabilities, and the clean-VM service lifecycle. Its logs contain zero unsupported WinSW `refresh` calls and contain the expected injected-failure marker.
 
@@ -21,8 +21,8 @@ The active workstation process is not an administrator and the Hyper-V PowerShel
 
 ## Real ChatGPT capture procedure
 
-1. Record the four `musu_oauth_client_resolution_total` counters.
-2. Create the ChatGPT custom MCP app against the fixed `/mcp` URL and complete approval.
-3. Scan tools, submit a checkpoint job, and reconnect after token refresh.
-4. Record the counters again and save gateway/worker Event Log entries and redacted service logs.
-5. Mark CIMD compatible only if the CIMD success counter increases without a DCR success increase for that fresh client.
+1. Run `pwsh -File windows\Capture-ChatGPTCompatibility.ps1 -Phase Begin`.
+2. Create a fresh ChatGPT custom MCP app against the fixed `/mcp` URL and complete approval.
+3. Scan tools and make at least one MCP tool call.
+4. Run the capture script with `-Phase End`.
+5. Accept the result only when a CIMD/DCR success delta and an MCP 2xx delta are both present. Preserve `compatibility-result.json` with the release evidence.

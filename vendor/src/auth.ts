@@ -116,6 +116,20 @@ export function createHostValidation(
   };
 }
 
+export function createMetricsAuth(
+  metricsToken: string | undefined,
+  fallback: RequestHandler,
+): RequestHandler {
+  return (request, response, next) => {
+    const suppliedToken = request.header("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (suppliedToken && metricsToken && tokensEqual(suppliedToken, metricsToken)) {
+      next();
+      return;
+    }
+    fallback(request, response, next);
+  };
+}
+
 export function createOriginValidation(
   config: AppConfig,
   onReject?: (reason: "origin") => void,

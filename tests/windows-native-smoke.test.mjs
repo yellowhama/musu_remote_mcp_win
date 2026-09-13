@@ -59,9 +59,15 @@ test('Windows native entrypoint serves health and protects MCP', { skip: process
     });
     assert.equal(protectedResponse.status, 401);
     assert.ok((await fs.readFile(path.join(stateRoot, 'approval-key.txt'), 'utf8')).trim().length >= 32);
+    const metricsKey = (await fs.readFile(path.join(stateRoot, 'metrics-key.txt'), 'utf8')).trim();
+    assert.ok(metricsKey.length >= 32);
+    const metricsResponse = await fetch(`http://127.0.0.1:${port}/metrics`, {
+      headers: { Host: 'localhost', Authorization: `Bearer ${metricsKey}` },
+    });
+    assert.equal(metricsResponse.status, 200);
   } finally {
     if (child.exitCode === null) {
-      spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+      child.kill();
       await new Promise(resolve => child.once('close', resolve));
     }
     await fs.rm(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });

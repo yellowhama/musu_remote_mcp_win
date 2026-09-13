@@ -16,7 +16,7 @@ The implementation moved materially during this audit: request Origin validation
 | Performance and scalability | **7.8/10** | persistent hash index and NTFS USN deltas reduce unchanged snapshot time by about 67%; safe verification still enumerates and stats the workspace |
 | Architecture and maintainability | **8.8/10** | typed SDK v2 boundary, explicit tool registry, OAuth/CIMD store split, TypeScript workspaces, focused file-content and process-output modules, and explicit gateway/worker roles |
 | Protocol longevity | **9.3/10** | MCP 2026-07-28 and CIMD are supported, 2025-11-25 and DCR remain for compatibility; real ChatGPT negotiation evidence remains |
-| Observability | **8.5/10** | authenticated fixed-cardinality metrics cover HTTP/auth/process/queue/checkpoint/disk; Windows lifecycle failures reach Event Log; dashboards remain operator work |
+| Observability | **8.7/10** | route-scoped operator metrics key and tested compatibility capture cover HTTP/auth/process/queue/checkpoint/disk; Windows lifecycle failures reach Event Log; dashboards remain operator work |
 
 Weighted overall maturity: **9.0/10 (A- beta)**. The remaining release evidence is a real ChatGPT connection and reboot persistence; neither can be proven by the current non-elevated workstation or a hosted runner that cannot reboot in place.
 
@@ -48,7 +48,7 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 
 ### P0 — stable-service gate
 
-1. **Finish external lifecycle evidence.** [Windows CI run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) covers install, health, restart, the exact injected upgrade rollback checkpoint, and uninstall. Add a reboot-capable VM run and a real ChatGPT OAuth connection.
+1. **Finish external lifecycle evidence.** [Windows CI run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) covers install, health, restart, the exact injected upgrade rollback checkpoint, and uninstall. Run the checked-in reboot harness on a reboot-capable VM and the checked-in compatibility capture around a real ChatGPT OAuth connection.
 
 ### P1 — maintainability and observability
 
