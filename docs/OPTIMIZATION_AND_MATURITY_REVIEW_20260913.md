@@ -10,15 +10,15 @@ The implementation moved materially during this audit: request Origin validation
 
 | Dimension | Score | Evidence and limit |
 | --- | ---: | --- |
-| Functional completeness | **9.2/10** | 23 tools, jobs, checkpoints, OAuth, modern and legacy MCP, native service scripts; live ChatGPT connector acceptance is still manual |
+| Functional completeness | **9.6/10** | 23 tools, jobs, checkpoints, OAuth, modern and legacy MCP, native service scripts; real ChatGPT discovery and read-only tool execution passed |
 | Security for one trusted operator | **9.3/10** | separate gateway/worker virtual accounts, deny ACLs, body-bound replay-resistant internal HMAC, OAuth audience binding and PKCE; worker remains an unrestricted trusted-code executor |
 | Recovery and operations | **9.3/10** | byte-exact objects, manifests, durable jobs, clean-VM-tested transactional upgrade rollback, dry-run reachable GC, retention, 10 GiB default watermark; reboot evidence remains |
 | Performance and scalability | **7.8/10** | persistent hash index and NTFS USN deltas reduce unchanged snapshot time by about 67%; safe verification still enumerates and stats the workspace |
 | Architecture and maintainability | **8.8/10** | typed SDK v2 boundary, explicit tool registry, OAuth/CIMD store split, TypeScript workspaces, focused file-content and process-output modules, and explicit gateway/worker roles |
-| Protocol longevity | **9.3/10** | MCP 2026-07-28 and CIMD are supported, 2025-11-25 and DCR remain for compatibility; real ChatGPT negotiation evidence remains |
+| Protocol longevity | **9.7/10** | MCP 2026-07-28 and CIMD passed with real ChatGPT; 2025-11-25 and DCR remain for compatibility pending a wider measurement window |
 | Observability | **8.7/10** | route-scoped operator metrics key and tested compatibility capture cover HTTP/auth/process/queue/checkpoint/disk; Windows lifecycle failures reach Event Log; dashboards remain operator work |
 
-Weighted overall maturity: **9.0/10 (A- beta)**. The remaining release evidence is a real ChatGPT connection and reboot persistence; neither can be proven by the current non-elevated workstation or a hosted runner that cannot reboot in place.
+Weighted overall maturity: **9.2/10 (A- beta)**. Real ChatGPT selected CIMD and completed discovery, tool listing, and a read-only tool call through the split gateway/worker. The remaining release evidence is reboot persistence, a fixed named-tunnel run, and a longer client-compatibility window.
 
 ## Performance evidence
 
@@ -48,14 +48,14 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 
 ### P0 — stable-service gate
 
-1. **Finish external lifecycle evidence.** [Windows CI run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) covers install, health, restart, the exact injected upgrade rollback checkpoint, and uninstall. Run the checked-in reboot harness on a reboot-capable VM and the checked-in compatibility capture around a real ChatGPT OAuth connection.
+1. **Finish external lifecycle evidence.** [Windows CI run 34802859266](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34802859266) covers build, tests, install, health, restart, the exact injected upgrade rollback checkpoint, and uninstall. Real ChatGPT acceptance now passes; run the checked-in reboot harness on a reboot-capable VM and repeat compatibility capture on a fixed named tunnel.
 
 ### P1 — maintainability and observability
 
 1. Progressively replace inferred adapter types with explicit manifest, job, journal, and tool callback contracts.
 3. Add operator dashboards and alerts for the implemented HTTP/auth/process/queue/checkpoint/disk metrics, then extend telemetry to retention and process-cancellation reasons.
 4. Add Cloudflare WAF examples for `/authorize`, `/register`, `/token`, and `/revoke`; keep server-side limits authoritative.
-5. Measure real ChatGPT CIMD/DCR negotiation during a compatibility window, then remove DCR only after the evidence shows it is unused.
+5. Continue measuring CIMD/DCR negotiation across ChatGPT updates and other supported clients; remove DCR only after the evidence shows it is unused.
 
 ### P2 — product finish
 

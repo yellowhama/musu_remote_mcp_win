@@ -36,11 +36,13 @@ Docker Desktop is not required.
 
 ## Documentation index
 
+- [Code and document index](docs/CODE_AND_DOCUMENT_INDEX.md)
 - [Windows architecture](docs/ARCHITECTURE.md)
 - [Operations and incident response](docs/OPERATIONS.md)
 - [Code audit](docs/CODE_AUDIT_20260913.md)
 - [Optimization and maturity review](docs/OPTIMIZATION_AND_MATURITY_REVIEW_20260913.md)
 - [Windows acceptance evidence](docs/WINDOWS_ACCEPTANCE_20260914.md)
+- [Real ChatGPT compatibility evidence](docs/CHATGPT_COMPATIBILITY_EVIDENCE_20260914.md)
 
 ## Install and run in the foreground
 
@@ -112,6 +114,8 @@ Quick Tunnels are intended only for testing. Their hostname changes when restart
 6. Start with a read-only request for the repository instruction file.
 
 The authorization-server metadata advertises Client ID Metadata Document (CIMD) support while retaining Dynamic Client Registration (DCR) for existing ChatGPT clients. CIMD documents must use a canonical HTTPS URL and a public network destination; the server pins the resolved address, rejects redirects, and bounds retrieval time and size.
+
+The 2026-09-14 acceptance run confirmed that a real ChatGPT custom MCP app selected CIMD, completed OAuth, discovered the server and all tools, and executed a read-only tool call through the split gateway and worker. The gateway preserves modern `Mcp-*` protocol headers when proxying requests and responses. DCR remains enabled until a broader compatibility window shows it is unused.
 
 Authenticated operators can scrape `/metrics` with the dedicated metrics key or a valid OAuth credential. The fixed-cardinality metrics cover HTTP status and latency, authentication rejection, CIMD-versus-DCR resolution, managed processes, mutation queue depth, checkpoint outcomes/bytes/duration, and workspace free space. The metrics key is route-scoped and does not grant MCP tool access.
 

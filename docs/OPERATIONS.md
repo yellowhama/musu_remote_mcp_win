@@ -68,6 +68,8 @@ Scrape `https://your-host.example/metrics` with the dedicated key at `<stateRoot
 
 Use `Capture-ChatGPTCompatibility.ps1 -Phase Begin`, create and exercise a fresh ChatGPT app, and then run it with `-Phase End`. It records deltas for `musu_oauth_client_resolution_total` and successful MCP requests without storing either secret. Preserve the generated result before considering DCR removal.
 
+The 2026-09-14 measured session selected CIMD and produced eight successful MCP requests, including `server/discover`, `tools/list`, and a read-only workspace query. If ChatGPT reports a generic connection failure, correlate the attempt with gateway and worker `mcp_request` records. A successful OAuth flow followed by a worker 400 on `server/discover` indicates lost or invalid `Mcp-*` protocol headers; a 403 before MCP dispatch indicates Origin rejection; `invalid_client` during authorization points to client metadata or token-endpoint authentication-method negotiation.
+
 ## Reboot acceptance
 
 On an elevated disposable VM with both split services healthy, run `Test-RebootPersistence.ps1 -Phase Prepare -RestartComputer`. It registers a one-time SYSTEM startup task, records the pre-reboot boot time, and after startup verifies that the boot time advanced, both services recovered, both health endpoints respond, deny ACLs remain, and lifecycle events exist. Read the result later with `Test-RebootPersistence.ps1 -Phase Status`.

@@ -26,6 +26,8 @@ OAuth clients and token hashes live in a SQLite database configured for WAL, ful
 
 Client discovery supports both MCP 2026-07-28 Client ID Metadata Documents and legacy Dynamic Client Registration. DCR records remain in SQLite. CIMD resolution accepts only canonical HTTPS document identifiers, rejects private and special-purpose addresses, pins the DNS result for the TLS request, refuses redirects, limits response size and duration, validates public-client metadata, coalesces concurrent lookups, and keeps a bounded TTL cache. The approval page identifies both the client-document host and callback host.
 
+The split gateway forwards the external client's `Mcp-*` protocol headers to the loopback worker and returns worker `Mcp-*` response headers to the client. OAuth credentials are replaced with the internal gateway credential, and the body-bound HMAC headers are generated after the external header set, so external input cannot replace the internal assertion. This is required for ChatGPT's MCP 2026 `server/discover` and named `tools/call` requests.
+
 ## Process model
 
 PowerShell 7 is the default shell. Windows shell argument construction uses `-NoLogo -NoProfile -NonInteractive -Command`; `cmd.exe` uses `/d /s /c`. PowerShell scripts use `pwsh.exe -File`. Python defaults to `python.exe` on Windows.
