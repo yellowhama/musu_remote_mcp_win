@@ -340,7 +340,9 @@ export async function startHttpServer(
   const cleanupInterval = setInterval(() => {
     services.processManager.prune();
   }, Math.min(config.processRetentionMs, 60_000));
-  cleanupInterval.unref();
+  // This timer is also the runtime lifetime anchor. On Windows the HTTP
+  // listener alone can stop retaining the process after synchronous startup
+  // helpers return, so unref would let an otherwise healthy server exit.
 
   const httpServer = await new Promise<HttpServer>((resolve, reject) => {
     const listeningServer = app.listen(config.port, config.host, () => resolve(listeningServer));

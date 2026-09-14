@@ -165,7 +165,7 @@ test('separate gateway and worker processes complete OAuth and signed MCP proxyi
     body: JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'initialize', params: {} }),
   });
   assert.equal(metricsKeyAtMcp.status, 401);
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise(resolve => setTimeout(resolve, 4500));
   assert.equal(worker.child.exitCode, null, `worker exited after startup: ${worker.log.value}`);
   assert.equal(gateway.child.exitCode, null, `gateway exited after startup: ${gateway.log.value}`);
 });
