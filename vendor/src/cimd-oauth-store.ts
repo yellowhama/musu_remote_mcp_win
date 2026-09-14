@@ -1,7 +1,8 @@
+import type { LookupAddress } from "node:dns";
 import { lookup } from "node:dns/promises";
 import { channel } from "node:diagnostics_channel";
 import { request } from "node:https";
-import { BlockList, isIP } from "node:net";
+import { BlockList, isIP, type LookupFunction } from "node:net";
 
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/server";
 
@@ -18,6 +19,20 @@ const telemetry = channel("musu.remote-mcp.telemetry");
 interface CachedClient {
   client: OAuthClientInformationFull;
   expiresAt: number;
+}
+
+interface CimdClientInformation extends OAuthClientInformationFull {
+  token_endpoint_auth_methods_supported?: unknown;
+}
+
+function selectsPublicClientAuthentication(client: CimdClientInformation): boolean {
+  const supported = client.token_endpoint_auth_methods_supported;
+  if (supported !== undefined) {
+    return Array.isArray(supported) &&
+      supported.every((method) => typeof method === "string") &&
+      supported.includes("none");
+  }
+  return client.token_endpoint_auth_method === "none";
 }
 
 function parseIpv4(address: string): number[] | undefined {
@@ -86,6 +101,17 @@ export function parseCimdClientId(clientId: string): URL | undefined {
   return url;
 }
 
+export function createPinnedLookup(addresses: LookupAddress[]): LookupFunction {
+  return (_hostname, options, callback) => {
+    const first = addresses[0]!;
+    if (options.all) {
+      callback(null, [first]);
+      return;
+    }
+    callback(null, first.address, first.family);
+  };
+}
+
 async function fetchCimdMetadata(clientId: string): Promise<OAuthClientInformationFull | undefined> {
   const url = parseCimdClientId(clientId);
   if (!url) return undefined;
@@ -100,10 +126,7 @@ async function fetchCimdMetadata(clientId: string): Promise<OAuthClientInformati
       method: "GET",
       headers: { accept: "application/json" },
       timeout: CIMD_TIMEOUT_MS,
-      lookup: (_hostname, _options, callback) => {
-        const first = addresses[0]!;
-        callback(null, first.address, first.family);
-      },
+      lookup: createPinnedLookup(addresses),
     }, (response) => {
       if (response.statusCode !== 200 || response.headers.location) {
         response.resume();
@@ -187,7 +210,7 @@ export class CimdOAuthStore extends PersistentOAuthStore {
   }
 
   private async resolveAndValidate(clientId: string): Promise<OAuthClientInformationFull | undefined> {
-    let client: OAuthClientInformationFull | undefined;
+    let client: CimdClientInformation | undefined;
     try {
       client = await this.resolveMetadata(clientId);
     } catch {
@@ -196,9 +219,17 @@ export class CimdOAuthStore extends PersistentOAuthStore {
     }
     if (
       !client || client.client_id !== clientId ||
-      client.token_endpoint_auth_method !== "none" ||
-      "client_secret" in client || this.cimdClientProblem(client)
+      !selectsPublicClientAuthentication(client) ||
+      "client_secret" in client
     ) {
+      telemetry.publish({ type: "oauth_client_resolution", method: "cimd", outcome: "failure" });
+      return undefined;
+    }
+    const selectedClient: OAuthClientInformationFull = {
+      ...client,
+      token_endpoint_auth_method: "none",
+    };
+    if (this.cimdClientProblem(selectedClient)) {
       telemetry.publish({ type: "oauth_client_resolution", method: "cimd", outcome: "failure" });
       return undefined;
     }
@@ -207,8 +238,8 @@ export class CimdOAuthStore extends PersistentOAuthStore {
       if (!oldest) break;
       this.cache.delete(oldest);
     }
-    this.cache.set(clientId, { client, expiresAt: Date.now() + CIMD_CACHE_TTL_MS });
+    this.cache.set(clientId, { client: selectedClient, expiresAt: Date.now() + CIMD_CACHE_TTL_MS });
     telemetry.publish({ type: "oauth_client_resolution", method: "cimd", outcome: "success" });
-    return client;
+    return selectedClient;
   }
 }

@@ -5,7 +5,12 @@ import path from "node:path";
 import type { OAuthClientInformationFull } from "@modelcontextprotocol/server";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CimdOAuthStore, isPublicCimdAddress, parseCimdClientId } from "../src/cimd-oauth-store.js";
+import {
+  CimdOAuthStore,
+  createPinnedLookup,
+  isPublicCimdAddress,
+  parseCimdClientId,
+} from "../src/cimd-oauth-store.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -27,6 +32,17 @@ async function createStore(resolver: (clientId: string) => Promise<OAuthClientIn
 }
 
 describe("CIMD and DCR client resolution", () => {
+  it("returns an address array when Node requests all lookup results", async () => {
+    const pinnedLookup = createPinnedLookup([{ address: "203.0.113.10", family: 4 }]);
+    const result = await new Promise<string | import("node:dns").LookupAddress[]>((resolve, reject) => {
+      pinnedLookup("client.example", { all: true }, (error, address) => {
+        if (error) reject(error);
+        else resolve(address);
+      });
+    });
+    expect(result).toEqual([{ address: "203.0.113.10", family: 4 }]);
+  });
+
   it("accepts canonical HTTPS document URLs and rejects ambiguous identifiers", () => {
     expect(parseCimdClientId("https://client.example/oauth/metadata")?.href)
       .toBe("https://client.example/oauth/metadata");
@@ -76,6 +92,27 @@ describe("CIMD and DCR client resolution", () => {
         token_endpoint_auth_method: "none",
       });
       expect((await store.getClient(dcr.client_id))?.client_id).toBe(dcr.client_id);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("selects none from ChatGPT's transitional authentication-method intersection", async () => {
+    const clientId = "https://chatgpt.com/oauth/connection/client.json";
+    const store = await createStore(async (requested) => ({
+      client_id: requested,
+      redirect_uris: ["https://chatgpt.com/connector/oauth/callback"],
+      token_endpoint_auth_method: "private_key_jwt",
+      token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      client_name: "ChatGPT",
+    } as OAuthClientInformationFull));
+    try {
+      expect(await store.getClient(clientId)).toMatchObject({
+        client_id: clientId,
+        token_endpoint_auth_method: "none",
+      });
     } finally {
       store.close();
     }
