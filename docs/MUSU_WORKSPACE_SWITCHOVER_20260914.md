@@ -31,7 +31,9 @@ Commit `25de8e7` keeps the existing cleanup timer referenced as the runtime life
 
 ## Final acceptance
 
-Ask the existing ChatGPT connector to report its default working directory and list only its top-level entries without mutation. Accept the switchover when it reports `F:\workspace\musu-bee`. Then perform a second read against `F:\workspace\llm-wiki` to prove both configured roots.
+Read access from ChatGPT reached the MUSU source after switchover. A separately signed live MCP verification then called `write_file`, `read_file`, and `remove_path` against a unique probe in each configured root. Both `F:\workspace\musu-bee` and `F:\workspace\llm-wiki` passed create/readback/delete, no probe remained, and checkpoint manifests were created under the production backup root.
+
+The live `write_file` definition contains both production roots. If ChatGPT still displays `F:\workspace\musu-remote-mcp-acceptance\editable`, that text is its cached pre-switchover tool definition; refresh/rescan the connector tools or reconnect the same app. Runtime enforcement already uses the production roots.
 
 ## Persistent deployment next step
 
