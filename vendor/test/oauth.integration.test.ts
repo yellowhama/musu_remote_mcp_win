@@ -202,6 +202,7 @@ describe("OAuth 2.1 MCP authorization", () => {
     };
 
     const loginPage = await fetch(`${baseUrl}/authorize?${form(authorizationValues)}`, {
+      headers: { origin: "https://chatgpt.com" },
       redirect: "manual",
     });
     expect(loginPage.status).toBe(200);
@@ -212,7 +213,10 @@ describe("OAuth 2.1 MCP authorization", () => {
 
     const rejectedLogin = await fetch(`${baseUrl}/authorize`, {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "https://chatgpt.com",
+      },
       body: form({ ...authorizationValues, access_key: "wrong-key" }),
       redirect: "manual",
     });
@@ -220,7 +224,10 @@ describe("OAuth 2.1 MCP authorization", () => {
 
     const approvedLogin = await fetch(`${baseUrl}/authorize`, {
       method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "https://chatgpt.com",
+      },
       body: form({ ...authorizationValues, access_key: "oauth-login-secret" }),
       redirect: "manual",
     });

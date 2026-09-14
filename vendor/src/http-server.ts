@@ -103,7 +103,14 @@ export async function startHttpServer(
     next();
   });
   app.use(createHostValidation(config, (reason) => metrics.rejectAuth(reason)));
-  app.use(createOriginValidation(config, (reason) => metrics.rejectAuth(reason)));
+  const validateMcpOrigin = createOriginValidation(config, (reason) => metrics.rejectAuth(reason));
+  app.use((request, response, next) => {
+    if (request.path !== config.endpoint) {
+      next();
+      return;
+    }
+    validateMcpOrigin(request, response, next);
+  });
 
   let activeMcpRequests = 0;
   const oauthProvider = config.oauthEnabled ? new RemoteDevOAuthProvider(config) : undefined;
