@@ -53,6 +53,15 @@ function rpcToolName(body: unknown): string | undefined {
   return typeof name === "string" ? name : undefined;
 }
 
+function forwardedMcpHeaders(request: Request): Record<string, string> {
+  const forwarded: Record<string, string> = {};
+  for (const [name, value] of Object.entries(request.headers)) {
+    if (!name.startsWith("mcp-") || value === undefined) continue;
+    forwarded[name] = Array.isArray(value) ? value.join(", ") : value;
+  }
+  return forwarded;
+}
+
 export async function startHttpServer(
   config: AppConfig,
   services: McpServices,
@@ -257,9 +266,7 @@ export async function startHttpServer(
             authorization: `Bearer ${config.internalAuthKey}`,
             "content-type": "application/json",
             accept: request.header("accept") ?? "application/json",
-            ...(request.header("mcp-protocol-version")
-              ? { "mcp-protocol-version": request.header("mcp-protocol-version")! }
-              : {}),
+            ...forwardedMcpHeaders(request),
             ...createInternalHeaders(config.internalAuthKey, auth.clientId, request.body),
           },
           body: JSON.stringify(request.body),
@@ -270,6 +277,9 @@ export async function startHttpServer(
         if (contentType) response.set("content-type", contentType);
         const cacheControl = upstream.headers.get("cache-control");
         if (cacheControl) response.set("cache-control", cacheControl);
+        for (const [name, value] of upstream.headers) {
+          if (name.startsWith("mcp-")) response.set(name, value);
+        }
         if (!upstream.body) {
           response.end();
           return;

@@ -100,14 +100,53 @@ test('separate gateway and worker processes complete OAuth and signed MCP proxyi
   });
   assert.equal(tokenResponse.status, 200);
   const tokens = await tokenResponse.json();
+  const discover = await fetch(`${baseUrl}/mcp`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${tokens.access_token}`,
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': 'server/discover',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 2, method: 'server/discover',
+      params: {
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': { name: 'split-smoke', version: '1' },
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+    }),
+  });
+  assert.equal(discover.status, 200, `${await discover.text()}\n${gateway.log.value}\n${worker.log.value}`);
   const initialize = await fetch(`${baseUrl}/mcp`, {
     method: 'POST', headers: { authorization: `Bearer ${tokens.access_token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'initialize', params: { protocolVersion: '2026-07-28', capabilities: {}, clientInfo: { name: 'split-smoke', version: '1' } } }),
   });
   assert.equal(initialize.status, 200, `${await initialize.text()}\n${gateway.log.value}\n${worker.log.value}`);
   const submit = await fetch(`${baseUrl}/mcp`, {
-    method: 'POST', headers: { authorization: `Bearer ${tokens.access_token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'submit_job', arguments: { requestKey: 'split-owner-proof', tool: 'checkpoint', arguments: {} } } }),
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${tokens.access_token}`,
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      'mcp-protocol-version': '2026-07-28',
+      'mcp-method': 'tools/call',
+      'mcp-name': 'submit_job',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0', id: 3, method: 'tools/call',
+      params: {
+        name: 'submit_job', arguments: { requestKey: 'split-owner-proof', tool: 'checkpoint', arguments: {} },
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': { name: 'split-smoke', version: '1' },
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+    }),
   });
   const submitBody = await submit.text();
   assert.equal(submit.status, 200, `${submitBody}\n${gateway.log.value}\n${worker.log.value}`);

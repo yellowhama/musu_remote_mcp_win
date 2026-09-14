@@ -46,14 +46,18 @@ describe("OAuth endpoint security boundaries", () => {
     const running = await startHttpServer(config, createServices(config));
 
     try {
-      const hostileOrigin = await fetch(`${baseUrl}/health`, {
-        headers: { origin: "https://attacker.example" },
+      const hostileOrigin = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: { origin: "https://attacker.example", "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
       });
       expect(hostileOrigin.status).toBe(403);
-      const validOrigin = await fetch(`${baseUrl}/health`, {
-        headers: { origin: baseUrl },
+      const validOrigin = await fetch(`${baseUrl}/mcp`, {
+        method: "POST",
+        headers: { origin: baseUrl, "content-type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "initialize", params: {} }),
       });
-      expect(validOrigin.status).toBe(200);
+      expect(validOrigin.status).toBe(401);
 
       const approvalKeyAsBearer = await fetch(`${baseUrl}/mcp`, {
         method: "POST",
