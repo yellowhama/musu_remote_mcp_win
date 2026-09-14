@@ -52,8 +52,8 @@ git clone https://github.com/yellowhama/musu_remote_mcp_win.git
 Set-Location musu_remote_mcp_win
 
 pwsh -File .\windows\Install.ps1 `
-  -EditableRoot 'F:\workspace\musu-bee','F:\workspace\llm-wiki' `
-  -DefaultCwd 'F:\workspace\musu-bee' `
+  -EditableRoot 'F:\workspace\musu-active\musu-bee','F:\workspace\musu-active\llm-wiki' `
+  -DefaultCwd 'F:\workspace\musu-active\musu-bee' `
   -StateRoot 'F:\musu-remote-mcp-data\state' `
   -BackupRoot 'F:\musu-remote-mcp-data\backups' `
   -PublicUrl 'https://mcp.example.com'
@@ -77,7 +77,7 @@ Open PowerShell 7 as Administrator and run the split-service installer:
 
 ```powershell
 pwsh -File .\windows\Install-SplitService.ps1 `
-  -EditableRoot 'F:\workspace\musu-bee','F:\workspace\llm-wiki' `
+  -EditableRoot 'F:\workspace\musu-active\musu-bee','F:\workspace\musu-active\llm-wiki' `
   -PublicUrl 'https://mcp.example.com' `
   -StateRoot 'F:\musu-remote-mcp-data\state' `
   -BackupRoot 'F:\musu-remote-mcp-data\backups'

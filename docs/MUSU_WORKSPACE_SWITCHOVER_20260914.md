@@ -4,8 +4,8 @@
 
 The active ChatGPT endpoint now reaches the Windows-native split gateway and worker with these editable roots:
 
-- `F:\workspace\musu-bee` (default working directory)
-- `F:\workspace\llm-wiki`
+- `F:\workspace\musu-active\musu-bee` (default working directory)
+- `F:\workspace\musu-active\llm-wiki`
 
 The acceptance fixture is no longer an editable root. The worker uses `F:\workspace\musu-remote-mcp-production\worker-state` and `F:\workspace\musu-remote-mcp-production\backups`, with a 10 GiB pre-checkpoint free-space reserve. Existing OAuth state and the tested Quick Tunnel URL were retained so the already-approved ChatGPT connector could survive the transition.
 
@@ -31,9 +31,18 @@ Commit `25de8e7` keeps the existing cleanup timer referenced as the runtime life
 
 ## Final acceptance
 
-Read access from ChatGPT reached the MUSU source after switchover. A separately signed live MCP verification then called `write_file`, `read_file`, and `remove_path` against a unique probe in each configured root. Both `F:\workspace\musu-bee` and `F:\workspace\llm-wiki` passed create/readback/delete, no probe remained, and checkpoint manifests were created under the production backup root.
+The first write acceptance proved the mutation and checkpoint mechanism but targeted the preserved historical roots `F:\workspace\musu-bee` and `F:\workspace\llm-wiki`. That result did not prove that the server was attached to the current MUSU source of truth. Comparing `AGENT_HANDOFF_CURRENT.md`, `MUSU_ORGANIZATION_PRODUCT_BASELINE_20260913.md`, Git heads, and `F:\workspace\musu-active\AGENTS.md` exposed the path error.
 
-The live `write_file` definition contains both production roots. If ChatGPT still displays `F:\workspace\musu-remote-mcp-acceptance\editable`, that text is its cached pre-switchover tool definition; refresh/rescan the connector tools or reconnect the same app. Runtime enforcement already uses the production roots.
+The runtime configuration was corrected without moving or overwriting either historical directory. A fresh signed live MCP verification then called `write_file`, `read_file`, and `remove_path` against a unique probe in each active root. Both `F:\workspace\musu-active\musu-bee` and `F:\workspace\musu-active\llm-wiki` passed create/readback/delete, no probe remained, and four new checkpoint manifests named only the active roots. Gateway, worker, and the public endpoint returned HTTP 200 after restart.
+
+These are separate acceptance claims:
+
+1. **Mutation capability:** the MCP can create, read back, delete, and checkpoint a permitted file.
+2. **Workspace identity:** the permitted roots resolve to the active MUSU code and wiki selected by the workspace's own authority files.
+
+Both claims now pass for the `musu-active` roots. A cached ChatGPT tool description can still display an older path until the connector tools are refreshed, but runtime enforcement and the live `write_file` definition use the active roots.
+
+The historical-root manifests remain valid evidence of the earlier capability test and are not evidence for the active workspace. They were retained for auditability.
 
 ## Persistent deployment next step
 
