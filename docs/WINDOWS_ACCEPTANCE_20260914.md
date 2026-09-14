@@ -6,6 +6,7 @@
 |---|---|---|
 | Root npm workspace and clean build | Pass | Typecheck/build succeeds after both generated `dist` trees are removed |
 | Separate gateway and worker processes | Pass | Native smoke completes DCR, PKCE, token issuance, signed proxying, MCP initialize, and owner-bound job submission |
+| Runtime survives startup helper boundary | Pass | native and split tests assert both processes remain alive after 4.5 seconds; live F-drive runtime remains healthy |
 | Unsigned/replayed/altered internal request | Pass | Worker returns 401; unit tests bind client, timestamp, nonce, and body hash |
 | Windows Job Object descendant cleanup | Pass | Real PowerShell child/grandchild termination test |
 | Service install, restart, injected upgrade rollback, uninstall | Pass | [GitHub Actions run 34769642484](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34769642484) installed both WinSW services, validated deny ACLs, restarted them, reached the intended failure-injection checkpoint, restored health, and uninstalled them |
@@ -16,6 +17,8 @@
 The current harness run completed 53 vendor tests with one platform-specific skip, 69 adapter/native tests, dependency audit with zero known vulnerabilities, and the clean-VM service lifecycle. [Run 34770818016](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34770818016) includes the route-scoped metrics key and both acceptance-script tests. Its logs contain zero unsupported WinSW `refresh` calls and contain the expected injected-failure marker.
 
 The final interoperability fixes are covered by [run 34802859266](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34802859266). A real ChatGPT session then passed the compatibility capture with `selectedMethod: cimd` and eight successful MCP requests. See [the preserved acceptance summary](CHATGPT_COMPATIBILITY_EVIDENCE_20260914.md).
+
+The MUSU workspace switchover exposed a startup-lifetime false pass: the earlier two-second assertion completed while the Event Log helper could still be blocking for three seconds. Commit `25de8e7` retains the cleanup timer and extends survival assertions to 4.5 seconds. [Run 34805492711](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34805492711) passes the updated full pipeline.
 
 ## Current workstation constraint
 

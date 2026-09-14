@@ -78,3 +78,4 @@
 | [Maturity review](OPTIMIZATION_AND_MATURITY_REVIEW_20260913.md) | Qualitative scores, performance evidence, and roadmap |
 | [Windows acceptance](WINDOWS_ACCEPTANCE_20260914.md) | Clean-VM and external acceptance matrix |
 | [ChatGPT evidence](CHATGPT_COMPATIBILITY_EVIDENCE_20260914.md) | Real CIMD OAuth, discovery, and tool-call evidence |
+| [MUSU workspace switchover](MUSU_WORKSPACE_SWITCHOVER_20260914.md) | Old Docker retirement, active F-drive roots, runtime fix, and persistent finish |

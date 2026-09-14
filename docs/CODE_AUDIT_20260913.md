@@ -23,6 +23,7 @@ No critical correctness defect was found in the current foreground or split-proc
 | High | ChatGPT CIMD resolution failed because custom DNS lookup and transitional auth-method metadata were handled too narrowly | support Node `all: true` lookup results and select the compatible public-client method from singular/plural metadata | focused CIMD tests and real ChatGPT OAuth success |
 | High | OAuth approval form inherited MCP Origin enforcement | scope Origin enforcement to `/mcp`; keep hostile MCP origins rejected | security integration tests and real approval completion |
 | High | Split gateway dropped `Mcp-Method` and `Mcp-Name`, causing authenticated `server/discover` to fail at the worker | forward external `Mcp-*` headers in both directions while regenerating internal auth assertions | modern split-process discovery/tool-call smoke and real ChatGPT 200 logs |
+| High | Windows foreground processes could exit normally after the three-second Event Log startup helper; the two-second survival check produced a false pass | retain the existing cleanup timer as a lifetime anchor and assert survival after 4.5 seconds | native and split smoke tests, live production runtime, CI run 34805492711 |
 
 ## Current security boundary
 
@@ -53,7 +54,7 @@ The USN index changes the dominant unchanged-workspace cost from hashing all fil
 - OAuth/CIMD and internal-auth focused tests: **19/19 pass**.
 - Production dependency audit: **0 known vulnerabilities**.
 - Git diff whitespace check: pass; Git reports only expected CRLF-to-LF normalization warnings.
-- GitHub Actions: [run 34802859266](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34802859266) passes build, all Windows and acceptance-harness tests, service install, ACL separation, restart, exact-point upgrade rollback, and uninstall.
+- GitHub Actions: [run 34805492711](https://github.com/yellowhama/musu_remote_mcp_win/actions/runs/34805492711) passes build, all Windows and acceptance-harness tests, extended runtime-survival checks, service install, ACL separation, restart, exact-point upgrade rollback, and uninstall.
 - Real ChatGPT acceptance: CIMD OAuth, server discovery, tool listing, and a read-only tool call passed; capture recorded 1 CIMD success and 8 MCP 2xx requests.
 
 ## Open release gates

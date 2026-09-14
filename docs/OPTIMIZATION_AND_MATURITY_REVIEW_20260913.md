@@ -43,6 +43,7 @@ The optimization is safe by construction: it falls back to a full scan on non-NT
 - Installs the service with rollback and health verification.
 - Implements manifest/job/log retention, reachable-object GC, dry-run plans, staged deletion, and pre-mutation free-space watermarks.
 - Reuses checkpoint hashes through a persistent NTFS USN cursor and content index while preserving full-scan fallbacks.
+- Keeps the process-manager cleanup timer referenced as a runtime lifetime anchor; survival tests cross the three-second Windows Event Log helper boundary.
 
 ## Remaining work, in order
 

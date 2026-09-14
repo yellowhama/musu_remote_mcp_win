@@ -43,6 +43,7 @@ Docker Desktop is not required.
 - [Optimization and maturity review](docs/OPTIMIZATION_AND_MATURITY_REVIEW_20260913.md)
 - [Windows acceptance evidence](docs/WINDOWS_ACCEPTANCE_20260914.md)
 - [Real ChatGPT compatibility evidence](docs/CHATGPT_COMPATIBILITY_EVIDENCE_20260914.md)
+- [MUSU workspace switchover](docs/MUSU_WORKSPACE_SWITCHOVER_20260914.md)
 
 ## Install and run in the foreground
 
